@@ -40,5 +40,9 @@ dist/
 .zeus_env
 .zbs.log
 
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
 
 .specstory/

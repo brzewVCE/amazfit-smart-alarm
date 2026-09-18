@@ -25,6 +25,10 @@ Page({
     alarm: null,
     isNew: true,
     mode: 'settings', // 'settings' | 'time'
+    tempHour: 0,
+    tempMinute: 0,
+    hourWidget: null,
+    minWidget: null,
     widgets: [],
   },
 
@@ -49,6 +53,8 @@ Page({
   clear() {
     this.state.widgets.forEach((w) => deleteWidget(w))
     this.state.widgets = []
+    this.state.hourWidget = null
+    this.state.minWidget = null
   },
 
   track(w) {
@@ -65,26 +71,207 @@ Page({
     }
   },
 
+  setTempHour(h) {
+    this.state.tempHour = ((h % 24) + 24) % 24
+    this.render()
+  },
+
+  setTempMinute(m) {
+    this.state.tempMinute = ((m % 60) + 60) % 60
+    this.render()
+  },
+
   renderTimePicker() {
-    const alarm = this.state.alarm
+    const pad = (n) => String(n).padStart(2, '0')
+
+    // Title
     this.track(
-      createWidget(widget.WIDGET_TIME_PICKER, {
-        type: 0,
-        style: 1,
-        title: 'Alarm time',
-        font_size: px(32),
-        select_font_size: px(46),
-        initHour: alarm.hour,
-        initMin: alarm.minute,
-        picker_cb: (pickerWidget, eventType) => {
-          if (eventType === 2) {
-            alarm.hour = pickerWidget.getProperty(prop.HOUR)
-            alarm.minute = pickerWidget.getProperty(prop.MINUTE)
-          }
-          if (eventType === 0 || eventType === 2) {
-            this.state.mode = 'settings'
-            this.render()
-          }
+      createWidget(widget.TEXT, {
+        x: px(16),
+        y: px(14),
+        w: px(400),
+        h: px(36),
+        text: 'Set Time',
+        text_size: px(26),
+        color: COLOR.textDim,
+        align_h: align.CENTER_H,
+        align_v: align.CENTER_V,
+      })
+    )
+
+    // Hour Up Button (+)
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(46),
+        y: px(56),
+        w: px(140),
+        h: px(56),
+        radius: px(16),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: '+',
+        text_size: px(34),
+        click_func: () => this.setTempHour(this.state.tempHour + 1),
+      })
+    )
+
+    // Minute Up Button (+)
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(246),
+        y: px(56),
+        w: px(140),
+        h: px(56),
+        radius: px(16),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: '+',
+        text_size: px(34),
+        click_func: () => this.setTempMinute(this.state.tempMinute + 1),
+      })
+    )
+
+    // Hour Display Button (tap cycles +1)
+    this.state.hourWidget = this.track(
+      createWidget(widget.BUTTON, {
+        x: px(46),
+        y: px(120),
+        w: px(140),
+        h: px(80),
+        radius: px(16),
+        normal_color: COLOR.surfaceAlt,
+        press_color: COLOR.border,
+        text: pad(this.state.tempHour),
+        text_size: px(52),
+        click_func: () => this.setTempHour(this.state.tempHour + 1),
+      })
+    )
+
+    // Colon separator
+    this.track(
+      createWidget(widget.TEXT, {
+        x: px(196),
+        y: px(120),
+        w: px(40),
+        h: px(80),
+        text: ':',
+        text_size: px(48),
+        color: COLOR.primary,
+        align_h: align.CENTER_H,
+        align_v: align.CENTER_V,
+      })
+    )
+
+    // Minute Display Button (tap cycles +5)
+    this.state.minWidget = this.track(
+      createWidget(widget.BUTTON, {
+        x: px(246),
+        y: px(120),
+        w: px(140),
+        h: px(80),
+        radius: px(16),
+        normal_color: COLOR.surfaceAlt,
+        press_color: COLOR.border,
+        text: pad(this.state.tempMinute),
+        text_size: px(52),
+        click_func: () => this.setTempMinute(this.state.tempMinute + 5),
+      })
+    )
+
+    // Hour Down Button (-)
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(46),
+        y: px(208),
+        w: px(140),
+        h: px(56),
+        radius: px(16),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: '-',
+        text_size: px(34),
+        click_func: () => this.setTempHour(this.state.tempHour - 1),
+      })
+    )
+
+    // Minute Down Button (-)
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(246),
+        y: px(208),
+        w: px(140),
+        h: px(56),
+        radius: px(16),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: '-',
+        text_size: px(34),
+        click_func: () => this.setTempMinute(this.state.tempMinute - 1),
+      })
+    )
+
+    // Quick minute presets (:00, :15, :30, :45)
+    const presets = [
+      { label: ':00', val: 0 },
+      { label: ':15', val: 15 },
+      { label: ':30', val: 30 },
+      { label: ':45', val: 45 },
+    ]
+    const preW = 88
+    const preGap = 10
+    presets.forEach((p, i) => {
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(22 + i * (preW + preGap)),
+          y: px(274),
+          w: px(preW),
+          h: px(44),
+          radius: px(12),
+          normal_color: COLOR.surface,
+          press_color: COLOR.primaryDim,
+          text: p.label,
+          text_size: px(22),
+          click_func: () => this.setTempMinute(p.val),
+        })
+      )
+    })
+
+    // Cancel Button
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(22),
+        y: px(332),
+        w: px(185),
+        h: px(60),
+        radius: px(18),
+        normal_color: COLOR.surface,
+        press_color: COLOR.border,
+        text: 'Cancel',
+        text_size: px(26),
+        click_func: () => {
+          this.state.mode = 'settings'
+          this.render()
+        },
+      })
+    )
+
+    // Confirm Button
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(225),
+        y: px(332),
+        w: px(185),
+        h: px(60),
+        radius: px(18),
+        normal_color: COLOR.primary,
+        press_color: COLOR.primaryDim,
+        text: 'Confirm',
+        text_size: px(26),
+        click_func: () => {
+          this.state.alarm.hour = this.state.tempHour
+          this.state.alarm.minute = this.state.tempMinute
+          this.state.mode = 'settings'
+          this.render()
         },
       })
     )
@@ -173,9 +360,9 @@ Page({
 
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(10),
-        y: px(10),
-        w: px(80),
+        x: px(16),
+        y: px(14),
+        w: px(90),
         h: px(50),
         radius: px(14),
         normal_color: COLOR.surface,
@@ -189,9 +376,9 @@ Page({
     if (!this.state.isNew) {
       this.track(
         createWidget(widget.BUTTON, {
-          x: px(342),
-          y: px(10),
-          w: px(80),
+          x: px(300),
+          y: px(14),
+          w: px(96),
           h: px(50),
           radius: px(14),
           normal_color: COLOR.surface,
@@ -217,6 +404,8 @@ Page({
         text: formatTime(alarm.hour, alarm.minute),
         text_size: px(56),
         click_func: () => {
+          this.state.tempHour = alarm.hour
+          this.state.tempMinute = alarm.minute
           this.state.mode = 'time'
           this.render()
         },
@@ -287,6 +476,24 @@ Page({
         click_func: () => this.saveAndExit(),
       })
     )
+    y += 60 + 12
+
+    if (!this.state.isNew) {
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(16),
+          y: px(y),
+          w: px(400),
+          h: px(56),
+          radius: px(18),
+          normal_color: COLOR.danger,
+          press_color: 0x992222,
+          text: 'Delete Alarm',
+          text_size: px(26),
+          click_func: () => this.deleteAndExit(),
+        })
+      )
+    }
   },
 
   onDestroy() {

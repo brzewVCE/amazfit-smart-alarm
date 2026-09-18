@@ -4,10 +4,10 @@ import { px } from '@zos/utils'
 import { getAlarms } from '../utils/alarm-store'
 import { COLOR, formatTime, daysSummary } from '../utils/constants'
 
-const MAX_VISIBLE_ROWS = 5
-const ROW_H = 72
+const MAX_VISIBLE_ROWS = 3
+const ROW_H = 68
 const ROW_GAP = 10
-const LIST_TOP = 92
+const LIST_TOP = 84
 
 Page({
   state: {
@@ -37,12 +37,12 @@ Page({
 
     this.track(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(16),
-        w: px(260),
-        h: px(56),
+        x: px(24),
+        y: px(20),
+        w: px(384),
+        h: px(50),
         text: 'Smart Alarm',
-        text_size: px(36),
+        text_size: px(34),
         color: COLOR.text,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
@@ -50,17 +50,18 @@ Page({
       })
     )
 
+    // Floating Action Button (+) in the bottom right corner
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(336),
-        y: px(14),
-        w: px(76),
-        h: px(58),
-        radius: px(16),
+        x: px(296),
+        y: px(360),
+        w: px(88),
+        h: px(88),
+        radius: px(44),
         normal_color: COLOR.primary,
         press_color: COLOR.primaryDim,
         text: '+',
-        text_size: px(40),
+        text_size: px(48),
         click_func: () => {
           push({ url: 'page/edit.page', params: 'id=0' })
         },

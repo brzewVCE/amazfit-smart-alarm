@@ -43,6 +43,110 @@
         }
       ],
       "designWidth": 432
+    },
+    "romew": {
+      "module": {
+        "page": {
+          "pages": [
+            "page/index.page",
+            "page/edit.page",
+            "page/ring.page"
+          ]
+        }
+      },
+      "platforms": [
+        {
+          "name": "RomeW64",
+          "deviceSource": 10223875
+        }
+      ],
+      "designWidth": 432
+    },
+    "rome": {
+      "module": {
+        "page": {
+          "pages": [
+            "page/index.page",
+            "page/edit.page",
+            "page/ring.page"
+          ]
+        }
+      },
+      "platforms": [
+        {
+          "name": "Rome64",
+          "deviceSource": 10223872
+        },
+        {
+          "name": "RomeWNFC64",
+          "deviceSource": 10223873
+        }
+      ],
+      "designWidth": 432
+    },
+    "milanw": {
+      "module": {
+        "page": {
+          "pages": [
+            "page/index.page",
+            "page/edit.page",
+            "page/ring.page"
+          ]
+        }
+      },
+      "platforms": [
+        {
+          "name": "MilanW",
+          "deviceSource": 8913155
+        },
+        {
+          "name": "MilanWNA",
+          "deviceSource": 8913159
+        },
+        {
+          "name": "MilanW64",
+          "deviceSource": 10092803
+        },
+        {
+          "name": "MilanWNA64",
+          "deviceSource": 10092807
+        },
+        {
+          "name": "MilanWGolf",
+          "deviceSource": 10617091
+        }
+      ],
+      "designWidth": 432
+    },
+    "milan": {
+      "module": {
+        "page": {
+          "pages": [
+            "page/index.page",
+            "page/edit.page",
+            "page/ring.page"
+          ]
+        }
+      },
+      "platforms": [
+        {
+          "name": "Milan",
+          "deviceSource": 8913152
+        },
+        {
+          "name": "MilanWNFC",
+          "deviceSource": 8913153
+        },
+        {
+          "name": "Milan64",
+          "deviceSource": 10092800
+        },
+        {
+          "name": "MilanWNFC64",
+          "deviceSource": 10092801
+        }
+      ],
+      "designWidth": 432
     }
   },
   "i18n": {

@@ -114,16 +114,23 @@ console.log('\n3. page/edit.page.js: create a new alarm end to end')
   ok(singleLetterButtons().length === 7, 'seven weekday toggle buttons are rendered')
   ok(allByType('WIDGET_SLIDE_SWITCH').length === 2, 'native SLIDE_SWITCH widgets are used for Alarm-enabled and Smart-Wake')
 
-  // Open the native time picker and complete a selection.
+  // Open the custom time picker and complete a selection.
   const timeButton = uiMock.__mock.created.find((w) => /^\d\d:\d\d$/.test(w._opts.text))
   ok(timeButton !== undefined, 'time button shows the current HH:MM')
   timeButton._opts.click_func()
-  const picker = allByType('WIDGET_WIDGET_TIME_PICKER')[0]
-  ok(picker !== undefined, 'tapping the time button opens the native TIME_PICKER')
-  picker.__testHour = 7
-  picker.__testMinute = 30
-  picker._opts.picker_cb(picker, 2) // 2 = complete
-  ok(editPage.state.alarm.hour === 7 && editPage.state.alarm.minute === 30, 'completing the picker updates the alarm time')
+  ok(editPage.state.mode === 'time', 'tapping the time button opens custom time picker')
+  ok(byText('Set Time') !== undefined, 'time picker title is rendered')
+  ok(byText('Confirm') !== undefined && byText('Cancel') !== undefined, 'Confirm and Cancel buttons are rendered')
+
+  // Set minute using :30 preset and hour to 7
+  const preset30 = byText(':30')
+  ok(preset30 !== undefined, 'minute preset :30 is rendered')
+  preset30._opts.click_func()
+  ok(editPage.state.tempMinute === 30, 'clicking preset :30 sets tempMinute to 30')
+
+  editPage.state.tempHour = 7
+  byText('Confirm')._opts.click_func()
+  ok(editPage.state.alarm.hour === 7 && editPage.state.alarm.minute === 30, 'confirming the picker updates the alarm time')
   ok(byText('07:30') !== undefined, 'settings screen re-renders showing the new time')
 
   // Toggle Monday on.
