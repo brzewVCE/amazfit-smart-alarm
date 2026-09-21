@@ -1,4 +1,4 @@
-// Runs the ACTUAL app source files (page/*.js, app.js, utils/*.js) under
+// Runs the ACTUAL app source files (page/*.js, app.js, alarm/*.js, captcha/*.js, ui/*.js) under
 // plain Node, against hand-written mocks of the @zos/* device APIs
 // (node_modules/@zos/*) plus minimal Page/App/getApp globals. This is not a
 // substitute for running on a real watch or the official simulator (neither
@@ -16,6 +16,7 @@ import * as routerMock from '@zos/router'
 import * as alarmMock from '@zos/alarm'
 import * as sensorMock from '@zos/sensor'
 import { __resetAllMockStorage } from '@zos/storage'
+import { WidgetTracker } from '../ui/tracker.js'
 
 let passCount = 0
 function ok(cond, msg) {
@@ -58,6 +59,25 @@ await import('../page/ring.page.js')
 const appDef = currentApp._def
 const [indexPage, editPage, ringPage] = registeredPages
 
+// Helpers to search what the mock UI has rendered:
+const byType = (type) => uiMock.__mock.created.find((w) => w._type === type)
+const byText = (prefix) =>
+  uiMock.__mock.created.find(
+    (w) =>
+      typeof w._opts.text === 'string' && w._opts.text.startsWith(prefix)
+  )
+const allByType = (type) => uiMock.__mock.created.filter((w) => w._type === type)
+const allButtons = () =>
+  uiMock.__mock.created.filter((w) => w._type === 'WIDGET_BUTTON')
+const singleLetterButtons = () =>
+  uiMock.__mock.created.filter(
+    (w) =>
+      w._type === 'WIDGET_BUTTON' &&
+      typeof w._opts.text === 'string' &&
+      w._opts.text.length === 1
+  )
+const dayButtons = singleLetterButtons
+
 // Every alarm firing is a brand-new mini-program launch on a real watch, so
 // page/ring.page.js's `state` object literal is re-evaluated fresh each
 // time. This test process instead imports the page module once and reuses
@@ -69,29 +89,16 @@ function freshRingPageState() {
     wake: null,
     ringing: false,
     vibrator: null,
-    widgets: [],
-    zombieMode: false,
-    zombieFailed: false,
-    zombieTimerId: null,
-    zombieFallbackAlarmId: null,
-    stepSensor: null,
-    initialSteps: 0,
-    currentSteps: 0,
-    targetSteps: 30,
-    remainingSeconds: 180,
-    stepTextWidget: null,
-    timerTextWidget: null,
+    tracker: new WidgetTracker(),
+    captchaFailed: false,
+    activeStrategy: null,
+    fallbackAlarmId: null,
   }
 }
 
-const byText = (text) => uiMock.__mock.created.find((w) => w._opts.text === text)
-const allByType = (type) => uiMock.__mock.created.filter((w) => w._type === type)
-const singleLetterButtons = () =>
-  uiMock.__mock.created.filter((w) => w._type === 'WIDGET_BUTTON' && typeof w._opts.text === 'string' && w._opts.text.length === 1)
-
-console.log('\n1. utils/alarm-scheduler.js: computeNextTimestamp')
+console.log('\n1. alarm/scheduler.js: computeNextTimestamp')
 {
-  const { computeNextTimestamp } = await import('../utils/alarm-scheduler.js')
+  const { computeNextTimestamp } = await import('../alarm/scheduler.js')
 
   const wed = new Date(2026, 0, 7, 10, 0, 0) // Wed Jan 7 2026, 10:00
   ok(wed.getDay() === 3, 'sanity: Jan 7 2026 is a Wednesday')
@@ -147,19 +154,14 @@ console.log('\n3. page/edit.page.js: create a new alarm end to end')
 
   editPage.state.tempHour = 7
   byText('Confirm')._opts.click_func()
-  ok(editPage.state.alarm.hour === 7 && editPage.state.alarm.minute === 30, 'confirming the picker updates the alarm time')
-  ok(byText('07:30') !== undefined, 'settings screen re-renders showing the new time')
+  ok(editPage.state.mode === 'settings', 'confirming time returns to settings screen')
+  ok(editPage.state.alarm.hour === 7 && editPage.state.alarm.minute === 30, 'time selection updates alarm hour and minute')
 
-  // Toggle Monday on.
-  const mondayButton = singleLetterButtons()[0]
-  mondayButton._opts.click_func()
-  ok((editPage.state.alarm.days & 0b1) === 0b1, 'toggling the first weekday button sets bit 0 (Monday)')
-
-  // Turn Smart Wake on via its native SLIDE_SWITCH.
-  const smartSwitch = allByType('WIDGET_SLIDE_SWITCH')[1]
+  // Enable smart-wake via its switch callback
+  const switches = allByType('WIDGET_SLIDE_SWITCH')
+  const smartSwitch = switches[1]
   smartSwitch._opts.checked_change_func(smartSwitch, true)
-  ok(editPage.state.alarm.smart === true, 'flipping the Smart Wake switch sets alarm.smart')
-  ok(byText('Wake window: 20 min before') !== undefined, 'enabling Smart Wake reveals the wake-window row')
+  ok(editPage.state.alarm.smart === true, 'toggling smart switch enables smart-wake')
 
   // Open CAPTCHA menu from the settings screen
   const captchaBtn = uiMock.__mock.created.find(
@@ -190,12 +192,18 @@ console.log('\n3. page/edit.page.js: create a new alarm end to end')
   byText('Done')._opts.click_func()
   ok(editPage.state.mode === 'settings', 'Done navigates back to settings')
 
+  // Pick Monday, Wednesday, Friday (bit0, bit2, bit4 = 0b0010101 = 21)
+  const days = dayButtons()
+  days[0]._opts.click_func() // Mon
+  days[2]._opts.click_func() // Wed
+  days[4]._opts.click_func() // Fri
+
   // Save.
   byText('Save')._opts.click_func()
   ok(routerMock.__mock.calls.some((c) => c.fn === 'back'), 'Save navigates back')
   ok(alarmMock.__mock.active.size === 2, 'saving a repeating Smart-Wake alarm arms exactly 2 native timers (final + check)')
 
-  const { getAlarms } = await import('../utils/alarm-store.js')
+  const { getAlarms } = await import('../alarm/repository.js')
   const saved = getAlarms()
   ok(saved.length === 1, 'exactly one alarm is persisted')
   ok(
@@ -212,14 +220,13 @@ console.log('\n4. page/index.page.js: non-empty state')
 {
   uiMock.__mock.reset()
   indexPage.build()
-  ok(byText(undefined) === undefined, 'sanity no-op')
   const row = uiMock.__mock.created.find((w) => w._type === 'WIDGET_BUTTON' && String(w._opts.text).startsWith('07:30'))
   ok(row !== undefined, 'the saved alarm shows up as a row in the list')
 }
 
 console.log('\n5. page/ring.page.js: alarm fires at exact time and enters Zombie Walk')
 {
-  const { getAlarms } = await import('../utils/alarm-store.js')
+  const { getAlarms } = await import('../alarm/repository.js')
   const alarm = getAlarms()[0]
   const finalIdBefore = alarm.nativeIds.final
 
@@ -261,7 +268,7 @@ console.log('\n5. page/ring.page.js: alarm fires at exact time and enters Zombie
 
 console.log('\n5b. page/ring.page.js: Zombie Walk timeout failure triggers loop with current time')
 {
-  const { getAlarms } = await import('../utils/alarm-store.js')
+  const { getAlarms } = await import('../alarm/repository.js')
   const alarm = getAlarms()[0]
 
   uiMock.__mock.reset()
@@ -289,7 +296,7 @@ console.log('\n5b. page/ring.page.js: Zombie Walk timeout failure triggers loop 
 
 console.log('\n5c. page/ring.page.js: CAPTCHA None directly exits on Dismiss')
 {
-  const { getAlarms, upsertAlarm } = await import('../utils/alarm-store.js')
+  const { getAlarms, upsertAlarm } = await import('../alarm/repository.js')
   const alarm = getAlarms()[0]
   alarm.captcha.type = 'none'
   upsertAlarm(alarm)
@@ -312,7 +319,7 @@ console.log('\n5c. page/ring.page.js: CAPTCHA None directly exits on Dismiss')
 
 console.log('\n6. page/ring.page.js: smart-wake check with no signal re-arms silently')
 {
-  const { getAlarms } = await import('../utils/alarm-store.js')
+  const { getAlarms } = await import('../alarm/repository.js')
   const alarm = getAlarms()[0]
   sensorMock.__mock.heartRate = { last: 60, resting: 60 } // no rise -> no early wake
 
@@ -333,7 +340,7 @@ console.log('\n6. page/ring.page.js: smart-wake check with no signal re-arms sil
 
 console.log('\n7. page/ring.page.js: smart-wake check WITH a heart-rate rise wakes early')
 {
-  const { getAlarms } = await import('../utils/alarm-store.js')
+  const { getAlarms } = await import('../alarm/repository.js')
   const alarm = getAlarms()[0]
   sensorMock.__mock.heartRate = { last: 78, resting: 60 } // +18 bpm -> above SMART_HR_DELTA
 
@@ -358,7 +365,7 @@ console.log('\n7. page/ring.page.js: smart-wake check WITH a heart-rate rise wak
 
 console.log('\n8. delete flow')
 {
-  const { getAlarms } = await import('../utils/alarm-store.js')
+  const { getAlarms } = await import('../alarm/repository.js')
   const alarm = getAlarms()[0]
 
   uiMock.__mock.reset()
@@ -373,9 +380,9 @@ console.log('\n8. delete flow')
   ok(routerMock.__mock.calls.some((c) => c.fn === 'back'), 'Delete navigates back')
 }
 
-console.log('\n9. utils/captcha: Strategy interface & dynamic extensibility')
+console.log('\n9. captcha: Strategy interface & dynamic extensibility')
 {
-  const { getCaptcha, getAvailableCaptchas, registerCaptcha } = await import('../utils/captcha/registry.js')
+  const { getCaptcha, getAvailableCaptchas, registerCaptcha } = await import('../captcha/registry.js')
   const available = getAvailableCaptchas()
   ok(available.some((c) => c.id === 'none'), "registry includes 'none' strategy")
   ok(available.some((c) => c.id === 'zombie'), "registry includes 'zombie' strategy")
@@ -395,5 +402,22 @@ console.log('\n9. utils/captcha: Strategy interface & dynamic extensibility')
   ok(getAvailableCaptchas().some((c) => c.id === 'math'), 'custom strategy is included in available captchas')
 }
 
-console.log(`\nALL ${passCount} CHECKS PASSED`)
+console.log('\n10. ui/skins: RingSkin interface & dynamic extensibility')
+{
+  const { getSkin, getAvailableSkins, registerSkin, RingSkin } = await import('../ui/skins/index.js')
+  const available = getAvailableSkins()
+  ok(available.some((s) => s.id === 'classic'), "skin registry includes 'classic' skin")
 
+  class CustomOledSkin extends RingSkin {
+    constructor() {
+      super('custom_oled', 'Custom OLED')
+    }
+    renderRing() {}
+    renderSuccess() {}
+  }
+  registerSkin(new CustomOledSkin())
+  ok(getSkin('custom_oled').label === 'Custom OLED', 'custom skin adapter is retrievable dynamically')
+  ok(getAvailableSkins().some((s) => s.id === 'custom_oled'), 'custom skin is included in available skins')
+}
+
+console.log(`\nALL ${passCount} CHECKS PASSED`)

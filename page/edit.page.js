@@ -1,4 +1,4 @@
-import { createWidget, widget, align, text_style, prop, deleteWidget } from '@zos/ui'
+import { createWidget, widget, align, text_style, prop } from '@zos/ui'
 import { back } from '@zos/router'
 import { px } from '@zos/utils'
 import {
@@ -7,10 +7,13 @@ import {
   removeAlarm,
   nextAlarmId,
   upsertAlarm,
-} from '../utils/alarm-store'
-import { scheduleAlarm, cancelNative } from '../utils/alarm-scheduler'
-import { COLOR, WEEKDAYS, SMART_WINDOWS, formatTime } from '../utils/constants'
-import { getCaptcha, getAvailableCaptchas } from '../utils/captcha'
+  scheduleAlarm,
+  cancelNative,
+  WEEKDAYS,
+  SMART_WINDOWS,
+} from '../alarm'
+import { COLOR, formatTime, WidgetTracker } from '../ui'
+import { getCaptcha, getAvailableCaptchas } from '../captcha'
 
 function parseParams(paramsStr) {
   const out = {}
@@ -25,12 +28,12 @@ Page({
   state: {
     alarm: null,
     isNew: true,
-    mode: 'settings', // 'settings' | 'time'
+    mode: 'settings', // 'settings' | 'time' | 'captcha'
     tempHour: 0,
     tempMinute: 0,
     hourWidget: null,
     minWidget: null,
-    widgets: [],
+    tracker: new WidgetTracker(),
   },
 
   onInit(paramsStr) {
@@ -52,15 +55,13 @@ Page({
   },
 
   clear() {
-    this.state.widgets.forEach((w) => deleteWidget(w))
-    this.state.widgets = []
+    this.state.tracker.clear()
     this.state.hourWidget = null
     this.state.minWidget = null
   },
 
   track(w) {
-    this.state.widgets.push(w)
-    return w
+    return this.state.tracker.track(w)
   },
 
   render() {

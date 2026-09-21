@@ -1,13 +1,17 @@
-import { createWidget, widget, align, text_style, deleteWidget } from '@zos/ui'
 import { exit } from '@zos/router'
 import { px } from '@zos/utils'
 import { Vibrator, VIBRATOR_SCENE_CALL } from '@zos/sensor'
 import { set as setNativeAlarm, cancel as cancelNativeAlarm } from '@zos/alarm'
-import { getAlarmById } from '../utils/alarm-store'
-import { scheduleNextCheck, rearmAfterRing, snooze } from '../utils/alarm-scheduler'
-import { checkForWakeSignal } from '../utils/smart-wake'
-import { getCaptcha } from '../utils/captcha'
-import { COLOR, SNOOZE_MINUTES, formatTime } from '../utils/constants'
+import {
+  getAlarmById,
+  scheduleNextCheck,
+  rearmAfterRing,
+  snooze,
+  checkForWakeSignal,
+  SNOOZE_MINUTES,
+} from '../alarm'
+import { COLOR, formatTime, WidgetTracker, getSkin } from '../ui'
+import { getCaptcha } from '../captcha'
 
 function getCurrentClockTime() {
   const now = new Date()
@@ -20,15 +24,16 @@ Page({
     wake: null,
     ringing: false,
     vibrator: null,
-    widgets: [],
-    zombieFailed: false,
+    tracker: new WidgetTracker(),
+    captchaFailed: false,
     activeStrategy: null,
+    fallbackAlarmId: null,
   },
 
   onInit() {
     const globalData = getApp()._options.globalData
     const wake = globalData.wakeParams
-    globalData.wakeParams = null // consume it so a later manual open doesn't reuse stale data
+    globalData.wakeParams = null // consume so subsequent manual launch starts clean
     this.state.wake = wake
 
     if (!wake || !wake.id) {
@@ -56,7 +61,7 @@ Page({
         exit()
       }
     } else if (wake.mode === 'captcha-fail') {
-      // Woken up by OS fallback timer because user did not complete the CAPTCHA in time
+      // Re-woken by OS fallback timer because user did not complete challenge in time
       this.state.captchaFailed = true
       this.state.ringing = true
     } else {
@@ -72,32 +77,6 @@ Page({
     const early = this.state.wake && this.state.wake.mode === 'smart-check'
     const failedCaptcha = this.state.captchaFailed
 
-    this.track(
-      createWidget(widget.FILL_RECT, {
-        x: px(0),
-        y: px(0),
-        w: px(432),
-        h: px(514),
-        color: COLOR.background,
-      })
-    )
-
-    // Displays the current real-time clock so repeated loops reflect actual time
-    this.track(
-      createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(140),
-        w: px(392),
-        h: px(100),
-        text: getCurrentClockTime(),
-        text_size: px(80),
-        color: COLOR.text,
-        align_h: align.CENTER_H,
-        align_v: align.CENTER_V,
-        text_style: text_style.NONE,
-      })
-    )
-
     let wakeMessage = 'Wake up!'
     if (early) {
       wakeMessage = 'Light sleep detected\nRise and shine'
@@ -105,49 +84,18 @@ Page({
       wakeMessage = 'Challenge not finished!\nWake up!'
     }
 
-    this.track(
-      createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(250),
-        w: px(392),
-        h: px(65),
-        text: wakeMessage,
-        text_size: px(28),
-        color: failedCaptcha ? COLOR.danger : COLOR.primary,
-        align_h: align.CENTER_H,
-        align_v: align.CENTER_V,
-        text_style: text_style.WRAP,
-      })
-    )
-
-    this.track(
-      createWidget(widget.BUTTON, {
-        x: px(40),
-        y: px(370),
-        w: px(160),
-        h: px(90),
-        radius: px(20),
-        normal_color: COLOR.surfaceAlt,
-        press_color: COLOR.border,
-        text: `Snooze ${SNOOZE_MINUTES}m`,
-        text_size: px(22),
-        click_func: () => this.onSnooze(),
-      })
-    )
-
-    this.track(
-      createWidget(widget.BUTTON, {
-        x: px(232),
-        y: px(370),
-        w: px(160),
-        h: px(90),
-        radius: px(20),
-        normal_color: COLOR.primary,
-        press_color: COLOR.primaryDim,
-        text: 'Dismiss',
-        text_size: px(26),
-        click_func: () => this.onDismiss(),
-      })
+    // Render the watch face appearance using the configured Skin adapter
+    const skin = getSkin(this.state.alarm?.skin || 'classic')
+    skin.renderRing(
+      { tracker: this.state.tracker, px },
+      {
+        timeStr: getCurrentClockTime(),
+        message: wakeMessage,
+        isWarning: failedCaptcha,
+        snoozeMinutes: SNOOZE_MINUTES,
+        onSnooze: () => this.onSnooze(),
+        onDismiss: () => this.onDismiss(),
+      }
     )
 
     this.startVibration()
@@ -220,18 +168,18 @@ Page({
         store: true,
         param: JSON.stringify({ id: this.state.alarm.id, mode: 'captcha-fail' }),
       })
-    } catch (e) { }
+    } catch (e) {}
   },
 
   cancelFallbackTimer() {
     if (this.state.fallbackAlarmId) {
-      try { cancelNativeAlarm(this.state.fallbackAlarmId) } catch (e) { }
+      try { cancelNativeAlarm(this.state.fallbackAlarmId) } catch (e) {}
       this.state.fallbackAlarmId = null
     }
   },
 
   /**
-   * CAPTCHA = SUCCESS: Alarm is officially dismissed and re-armed for the next occurrence.
+   * CAPTCHA = SUCCESS: Alarm is officially dismissed and re-armed for next occurrence.
    */
   onCaptchaSuccess() {
     this.cancelFallbackTimer()
@@ -242,43 +190,10 @@ Page({
     this.stopVibration()
     this.clearWidgets()
 
-    this.track(
-      createWidget(widget.FILL_RECT, {
-        x: px(0),
-        y: px(0),
-        w: px(432),
-        h: px(514),
-        color: COLOR.background,
-      })
-    )
-
-    this.track(
-      createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(160),
-        w: px(392),
-        h: px(70),
-        text: '✓ AWAKE!',
-        text_size: px(54),
-        color: COLOR.primary,
-        align_h: align.CENTER_H,
-        align_v: align.CENTER_V,
-      })
-    )
-
-    this.track(
-      createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(240),
-        w: px(392),
-        h: px(60),
-        text: 'Challenge complete\nAlarm dismissed',
-        text_size: px(26),
-        color: COLOR.textDim,
-        align_h: align.CENTER_H,
-        align_v: align.CENTER_V,
-        text_style: text_style.WRAP,
-      })
+    const skin = getSkin(this.state.alarm?.skin || 'classic')
+    skin.renderSuccess(
+      { tracker: this.state.tracker, px },
+      { message: '✓ AWAKE!\nChallenge complete' }
     )
 
     // Brief confirmation vibration
@@ -287,9 +202,9 @@ Page({
       vibrator.setMode(VIBRATOR_SCENE_CALL)
       vibrator.start()
       setTimeout(() => {
-        try { vibrator.stop() } catch (e) { }
+        try { vibrator.stop() } catch (e) {}
       }, 400)
-    } catch (e) { }
+    } catch (e) {}
 
     rearmAfterRing(this.state.alarm)
 
@@ -312,13 +227,11 @@ Page({
   },
 
   clearWidgets() {
-    this.state.widgets.forEach((w) => deleteWidget(w))
-    this.state.widgets = []
+    this.state.tracker.clear()
   },
 
   track(w) {
-    this.state.widgets.push(w)
-    return w
+    return this.state.tracker.track(w)
   },
 
   onDestroy() {

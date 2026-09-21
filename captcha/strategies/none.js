@@ -1,24 +1,25 @@
 import { createWidget, widget, align, text_style } from '@zos/ui'
 import { px } from '@zos/utils'
-import { COLOR } from '../constants'
+import { COLOR } from '../../ui'
+import { CaptchaStrategy } from '../base'
 
 /**
- * Null/No-op CAPTCHA strategy: alarm dismisses immediately without challenges.
+ * Null / No-op CAPTCHA adapter: allows immediate alarm dismissal without challenges.
  */
-export const noneCaptcha = {
-  id: 'none',
-  label: 'None',
+export class NoneCaptchaStrategy extends CaptchaStrategy {
+  constructor() {
+    super('none', 'None')
+  }
 
   getDefaultConfig() {
     return { type: 'none' }
-  },
+  }
 
   getSummary() {
     return 'None'
-  },
+  }
 
   renderSettings(page) {
-    // Optional informational notice for 'None' mode
     page.track(
       createWidget(widget.TEXT, {
         x: px(20),
@@ -33,14 +34,15 @@ export const noneCaptcha = {
         text_style: text_style.WRAP,
       })
     )
-  },
+  }
 
   start(ctx) {
-    // Immediately completes dismissal
     if (ctx && ctx.onSuccess) {
       ctx.onSuccess()
     }
-  },
+  }
 
-  cleanup() {},
+  cleanup() {}
 }
+
+export const noneCaptcha = new NoneCaptchaStrategy()

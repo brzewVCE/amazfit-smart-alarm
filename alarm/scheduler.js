@@ -1,13 +1,19 @@
 import { set, cancel } from '@zos/alarm'
 import { SMART_CHECK_INTERVAL_SEC } from './constants'
-import { upsertAlarm } from './alarm-store'
+import { upsertAlarm } from './repository'
 
 const RING_URL = 'page/ring.page'
 
 /**
- * Next UTC timestamp (seconds) at which `hour:minute` occurs, respecting the
+ * Computes next UTC timestamp (seconds) at which `hour:minute` occurs, respecting the
  * `days` weekday bitmask (bit 0 = Monday .. bit 6 = Sunday). `days === 0`
  * means "next time this clock time occurs" (today or tomorrow).
+ *
+ * @param {number} hour
+ * @param {number} minute
+ * @param {number} days - bitmask
+ * @param {Date} [from=new Date()]
+ * @returns {number} UTC epoch seconds
  */
 export function computeNextTimestamp(hour, minute, days, from = new Date()) {
   const base = new Date(from)
@@ -38,7 +44,6 @@ export function computeNextTimestamp(hour, minute, days, from = new Date()) {
     }
   }
 
-  // Unreachable in practice (a full week is scanned above).
   return Math.floor(base.getTime() / 1000)
 }
 
@@ -46,6 +51,10 @@ function cancelIfSet(id) {
   if (id) cancel(id)
 }
 
+/**
+ * Cancels active native OS alarms associated with the alarm entity.
+ * @param {import('./model').Alarm} alarm
+ */
 export function cancelNative(alarm) {
   cancelIfSet(alarm.nativeIds && alarm.nativeIds.final)
   cancelIfSet(alarm.nativeIds && alarm.nativeIds.check)
@@ -54,8 +63,11 @@ export function cancelNative(alarm) {
 
 /**
  * Arms (or re-arms) the native OS timers for an alarm: the exact-time "final"
- * alarm, and, if smart-wake is on, an earlier "check" alarm that starts
- * polling heart rate at the start of the wake window.
+ * alarm, and, if smart-wake is enabled, an earlier "check" alarm that polls
+ * heart rate at the start of the wake window.
+ *
+ * @param {import('./model').Alarm} alarm
+ * @returns {import('./model').Alarm}
  */
 export function scheduleAlarm(alarm) {
   cancelNative(alarm)
@@ -94,7 +106,9 @@ export function scheduleAlarm(alarm) {
   return alarm
 }
 
-/** Schedules the next periodic heart-rate check within a wake window. */
+/**
+ * Schedules the next periodic heart-rate check within a smart-wake window.
+ */
 export function scheduleNextCheck(alarm, checksRemaining, finalTime) {
   cancelIfSet(alarm.nativeIds.check)
 
@@ -113,20 +127,27 @@ export function scheduleNextCheck(alarm, checksRemaining, finalTime) {
   upsertAlarm(alarm)
 }
 
-/** Called once the ring screen has been dismissed (or snoozed-and-later-fired). */
+/**
+ * Called once the ring screen has been dismissed.
+ * Re-arms repeating alarms or disables one-shot alarms.
+ * @param {import('./model').Alarm} alarm
+ */
 export function rearmAfterRing(alarm) {
   cancelNative(alarm)
 
   if (alarm.days) {
-    // Repeating alarm: arm the next occurrence.
     scheduleAlarm(alarm)
   } else {
-    // One-shot alarm: it has done its job.
     alarm.enabled = false
     upsertAlarm(alarm)
   }
 }
 
+/**
+ * Snoozes an alarm for the given minutes by setting a delayed native timer.
+ * @param {import('./model').Alarm} alarm
+ * @param {number} minutes
+ */
 export function snooze(alarm, minutes) {
   cancelNative(alarm)
   alarm.nativeIds.final = set({

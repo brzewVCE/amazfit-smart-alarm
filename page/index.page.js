@@ -1,8 +1,8 @@
-import { createWidget, widget, align, text_style, deleteWidget } from '@zos/ui'
+import { createWidget, widget, align, text_style } from '@zos/ui'
 import { push } from '@zos/router'
 import { px } from '@zos/utils'
-import { getAlarms } from '../utils/alarm-store'
-import { COLOR, formatTime, daysSummary } from '../utils/constants'
+import { getAlarms } from '../alarm'
+import { COLOR, formatTime, daysSummary, WidgetTracker } from '../ui'
 
 const MAX_VISIBLE_ROWS = 3
 const ROW_H = 68
@@ -11,7 +11,7 @@ const LIST_TOP = 84
 
 Page({
   state: {
-    widgets: [],
+    tracker: new WidgetTracker(),
   },
 
   build() {
@@ -23,13 +23,11 @@ Page({
   },
 
   clear() {
-    this.state.widgets.forEach((w) => deleteWidget(w))
-    this.state.widgets = []
+    this.state.tracker.clear()
   },
 
   track(w) {
-    this.state.widgets.push(w)
-    return w
+    return this.state.tracker.track(w)
   },
 
   render() {
@@ -118,6 +116,6 @@ Page({
   },
 
   onDestroy() {
-    this.clear()
+    this.state.tracker.destroy()
   },
 })

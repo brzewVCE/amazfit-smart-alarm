@@ -6,30 +6,31 @@ import {
   pauseDropWristScreenOff,
   resetDropWristScreenOff,
 } from '@zos/display'
-import {
-  COLOR,
-  SNOOZE_MINUTES,
-  DEFAULT_ZOMBIE_STEPS,
-  ZOMBIE_STEPS_STEP,
-  ZOMBIE_STEPS_MIN,
-  ZOMBIE_STEPS_MAX,
-  DEFAULT_ZOMBIE_TIMEOUT_SEC,
-  ZOMBIE_TIMEOUT_STEP_SEC,
-  ZOMBIE_TIMEOUT_MIN_SEC,
-  ZOMBIE_TIMEOUT_MAX_SEC,
-  formatDuration,
-} from '../constants'
+import { COLOR, formatDuration } from '../../ui'
+import { SNOOZE_MINUTES } from '../../alarm'
+import { CaptchaStrategy } from '../base'
+
+// Internal configuration defaults and bounds for Zombie Walk challenge
+export const DEFAULT_ZOMBIE_STEPS = 30
+export const ZOMBIE_STEPS_STEP = 5
+export const ZOMBIE_STEPS_MIN = 10
+export const ZOMBIE_STEPS_MAX = 200
+
+export const DEFAULT_ZOMBIE_TIMEOUT_SEC = 180
+export const ZOMBIE_TIMEOUT_STEP_SEC = 30
+export const ZOMBIE_TIMEOUT_MIN_SEC = 60
+export const ZOMBIE_TIMEOUT_MAX_SEC = 600
 
 /**
- * Zombie Walk CAPTCHA challenge strategy:
- * Requires the user to walk a specified number of steps to permanently dismiss the alarm.
+ * Zombie Walk CAPTCHA challenge adapter:
+ * Requires the user to walk a specified number of steps within a time window
+ * to permanently dismiss the alarm.
  */
-class ZombieWalkStrategy {
+export class ZombieWalkStrategy extends CaptchaStrategy {
   constructor() {
-    this.id = 'zombie'
-    this.label = 'Zombie Walk'
+    super('zombie', 'Zombie Walk')
 
-    // Runtime challenge state
+    // Runtime state
     this._ctx = null
     this._stepSensor = null
     this._initialSteps = 0
@@ -244,17 +245,17 @@ class ZombieWalkStrategy {
       this._initialSteps = 0
     }
 
-    // 3. Keep screen bright during challenge
+    // 2. Keep screen bright during challenge
     try {
       const brightMs = Math.min(this._remainingSeconds * 1000 + 10000, 300000)
       setPageBrightTime({ brightTime: brightMs })
       pauseDropWristScreenOff({ duration: brightMs })
     } catch (e) {}
 
-    // 4. Render initial UI
+    // 3. Render initial UI
     this._renderChallengeUI()
 
-    // 5. Start periodic tick interval
+    // 4. Start periodic tick interval
     this._timerId = setInterval(() => {
       this._onTick()
     }, 1000)

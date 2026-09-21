@@ -1,5 +1,6 @@
 {
   "name": "amazfit-smart-alarm",
+  "type": "module",
   "version": "1.0.0",
   "description": "Smart Alarm mini-program for Amazfit Bip Max, built on Zepp OS.",
   "scripts": {
