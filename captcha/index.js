@@ -1,4 +1,5 @@
 export { CaptchaStrategy } from './base'
+export { ProgressiveChallengeStrategy } from './progressive-base'
 export { getCaptcha, getAvailableCaptchas, registerCaptcha } from './registry'
 export { noneCaptcha, NoneCaptchaStrategy } from './strategies/none'
 export {

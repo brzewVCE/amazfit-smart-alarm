@@ -15,8 +15,11 @@ import * as uiMock from '@zos/ui'
 import * as routerMock from '@zos/router'
 import * as alarmMock from '@zos/alarm'
 import * as sensorMock from '@zos/sensor'
+import * as deviceMock from '@zos/device'
+import * as interactionMock from '@zos/interaction'
 import { __resetAllMockStorage } from '@zos/storage'
 import { WidgetTracker } from '../ui/tracker.js'
+import { lockExit, unlockExit, isExitLocked } from '../utils/anti-exit.js'
 
 let passCount = 0
 function ok(cond, msg) {
@@ -30,6 +33,8 @@ function resetAllMocks() {
   routerMock.__mock.reset()
   alarmMock.__mock.reset()
   sensorMock.__mock.reset()
+  deviceMock.__mock.reset()
+  interactionMock.__mock.reset()
   __resetAllMockStorage()
 }
 
@@ -77,6 +82,13 @@ const singleLetterButtons = () =>
       w._opts.text.length === 1
   )
 const dayButtons = singleLetterButtons
+
+// Helper to wait for deferred setTimeout calls (e.g. _checkProgress deferral)
+const tick = (ms = 80) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// safeExit() tries home() first, so test checks for either home or exit
+const calledSafeExit = () =>
+  routerMock.__mock.calls.some((c) => c.fn === 'home' || c.fn === 'exit')
 
 // Every alarm firing is a brand-new mini-program launch on a real watch, so
 // page/ring.page.js's `state` object literal is re-evaluated fresh each
@@ -136,7 +148,7 @@ console.log('\n3. page/edit.page.js: create a new alarm end to end')
   ok(byText('Save') !== undefined, 'settings screen renders a Save button')
   ok(byText('Del') === undefined, 'a new (unsaved) alarm has no Delete button')
   ok(singleLetterButtons().length === 7, 'seven weekday toggle buttons are rendered')
-  ok(allByType('WIDGET_SLIDE_SWITCH').length === 2, 'native SLIDE_SWITCH widgets are used for Alarm-enabled and Smart-Wake')
+  ok(allByType('WIDGET_SLIDE_SWITCH').length === 1, 'native SLIDE_SWITCH widget is used for Alarm-enabled')
 
   // Open the custom time picker and complete a selection.
   const timeButton = uiMock.__mock.created.find((w) => /^\d\d:\d\d$/.test(w._opts.text))
@@ -157,11 +169,48 @@ console.log('\n3. page/edit.page.js: create a new alarm end to end')
   ok(editPage.state.mode === 'settings', 'confirming time returns to settings screen')
   ok(editPage.state.alarm.hour === 7 && editPage.state.alarm.minute === 30, 'time selection updates alarm hour and minute')
 
-  // Enable smart-wake via its switch callback
-  const switches = allByType('WIDGET_SLIDE_SWITCH')
-  const smartSwitch = switches[1]
+  // Open Wake Mode menu from the settings screen
+  const wakeBtn = uiMock.__mock.created.find(
+    (w) => typeof w._opts.text === 'string' && w._opts.text.startsWith('Wake Mode:')
+  )
+  ok(wakeBtn !== undefined, 'Wake Mode button is rendered on settings screen')
+  wakeBtn._opts.click_func()
+  ok(editPage.state.mode === 'smart', 'tapping Wake Mode opens Wake Mode menu')
+  ok(byText('Wake Mode') !== undefined, 'Wake Mode title is rendered')
+  const smartSwitch = allByType('WIDGET_SLIDE_SWITCH')[0]
   smartSwitch._opts.checked_change_func(smartSwitch, true)
   ok(editPage.state.alarm.smart === true, 'toggling smart switch enables smart-wake')
+  ok(byText('20 min') !== undefined, 'window options are rendered when smart wake is enabled')
+  byText('Done')._opts.click_func()
+  ok(editPage.state.mode === 'settings', 'Done returns to settings screen')
+
+  // Open Snooze menu from the settings screen
+  const snoozeBtn = uiMock.__mock.created.find(
+    (w) => typeof w._opts.text === 'string' && w._opts.text.startsWith('Snooze:')
+  )
+  ok(snoozeBtn !== undefined, 'Snooze button is rendered on settings screen')
+  snoozeBtn._opts.click_func()
+  ok(editPage.state.mode === 'snooze', 'tapping Snooze opens Snooze menu')
+  ok(byText('Snooze') !== undefined, 'Snooze title is rendered')
+  ok(byText('10 min') !== undefined, '10 min option is rendered')
+  byText('15 min')._opts.click_func()
+  ok(editPage.state.alarm.snoozeMinutes === 15, 'selecting 15 min updates snooze duration')
+
+  // Toggle Snooze switch OFF -> duration options are hidden!
+  const snoozeSwitch = allByType('WIDGET_SLIDE_SWITCH')[0]
+  snoozeSwitch._opts.checked_change_func(snoozeSwitch, false)
+  ok(editPage.state.alarm.snooze === false, 'toggling snooze switch off disables snooze')
+  ok(byText('15 min') === undefined && byText('10 min') === undefined, 'snooze options are hidden when snooze is off')
+  ok(byText('Snooze is disabled.') !== undefined, 'disabled explanation is shown')
+
+  // Toggle Snooze back ON and select 10 min
+  snoozeSwitch._opts.checked_change_func(snoozeSwitch, true)
+  ok(editPage.state.alarm.snooze === true, 'toggling snooze switch on enables snooze')
+  byText('10 min')._opts.click_func()
+  ok(editPage.state.alarm.snoozeMinutes === 10, 'selecting 10 min updates snooze duration')
+
+  byText('Done')._opts.click_func()
+  ok(editPage.state.mode === 'settings', 'Done returns to settings screen')
 
   // Open CAPTCHA menu from the settings screen
   const captchaBtn = uiMock.__mock.created.find(
@@ -243,13 +292,17 @@ console.log('\n5. page/ring.page.js: alarm fires at exact time and enters Zombie
 
   ringPage.build()
   ok(byText('Wake up!') !== undefined, 'ringing screen shows the plain wake-up message (not the smart-wake one)')
-  ok(byText('Dismiss') !== undefined && byText('Snooze 9m') !== undefined, 'Dismiss and Snooze buttons are rendered')
+  ok(byText('Dismiss') !== undefined && byText('Snooze 10m') !== undefined, 'Dismiss and Snooze buttons are rendered')
   ok(sensorMock.__mock.vibrations.some((v) => v.action === 'start'), 'ringing starts the vibration motor')
+  ok(isExitLocked() === true, 'ringing engages strict anti-exit lock')
+  ok(interactionMock.__mock.triggerKey(interactionMock.KEY_BACK) === true, 'clicking hardware key returns true (cancels OS exit)')
+  ok(interactionMock.__mock.triggerGesture(interactionMock.GESTURE_RIGHT) === true, 'swiping right returns true (cancels swipe-to-back)')
 
   // Dismissing with Zombie Walk active transitions into the walk challenge
   byText('Dismiss')._opts.click_func()
   ok(sensorMock.__mock.vibrations.some((v) => v.action === 'stop'), 'Dismiss stops the vibration motor')
   ok(ringPage.state.activeStrategy !== null && ringPage.state.activeStrategy.id === 'zombie', 'Dismiss enters Zombie Walk challenge mode')
+  ok(interactionMock.__mock.triggerKey(interactionMock.KEY_SELECT) === true, 'hardware button during CAPTCHA challenge is strictly blocked')
   ok(alarmMock.__mock.active.size === 3, 'Zombie Walk arms a fallback timer for timeout failure')
   ok(byText('ZOMBIE WALK') !== undefined, 'Zombie Walk title is displayed')
   ok(byText('0 / 30') !== undefined, 'initial 0 / 30 steps is displayed')
@@ -257,6 +310,7 @@ console.log('\n5. page/ring.page.js: alarm fires at exact time and enters Zombie
   // Simulate walking 30 steps via the Step sensor's registered onChange callback
   sensorMock.__mock.steps.current = 130 // started at 100, +30 steps
   sensorMock.__mock.steps.callbacks.forEach((cb) => cb())
+  await tick() // wait for deferred _checkProgress setTimeout
   ok(ringPage.state.activeStrategy === null, 'completing steps clears active strategy')
   ok(alarmMock.__mock.active.size === 2, 'completing steps cancels the fallback alarm')
   ok(byText('✓ AWAKE!') !== undefined, 'success screen shows AWAKE!')
@@ -285,13 +339,21 @@ console.log('\n5b. page/ring.page.js: Zombie Walk timeout failure triggers loop 
   // Simulate time expiring
   ringPage.state.activeStrategy._remainingSeconds = 0
   ringPage.state.activeStrategy._checkProgress()
+  await tick() // wait for deferred failure setTimeout
   ok(ringPage.state.activeStrategy === null, 'failure exits zombie mode')
   ok(ringPage.state.captchaFailed === true, 'captchaFailed flag set')
+  ok(ringPage.state.ringing === true, 'ringing state is preserved on failure')
+  ok(routerMock.__mock.calls.length === 0, 'alarm does NOT exit the application on timeout failure')
+  ok(ringPage.state.fallbackAlarmId === null, 'fallback native alarm is safely cancelled on in-app failure')
   ok(
     sensorMock.__mock.vibrations[sensorMock.__mock.vibrations.length - 1].action === 'start',
     'alarm resumes ringing with loud vibration'
   )
   ok(byText('Challenge not finished!\nWake up!') !== undefined, 'generic failure message is displayed on re-ring screen')
+
+  // Dismissing again on re-ring screen should start challenge again
+  byText('Dismiss')._opts.click_func()
+  ok(ringPage.state.activeStrategy !== null && ringPage.state.activeStrategy.id === 'zombie', 'subsequent Dismiss enters zombie mode again')
 }
 
 console.log('\n5c. page/ring.page.js: CAPTCHA None directly exits on Dismiss')
@@ -310,7 +372,7 @@ console.log('\n5c. page/ring.page.js: CAPTCHA None directly exits on Dismiss')
   ringPage.onInit()
   ringPage.build()
   byText('Dismiss')._opts.click_func()
-  ok(routerMock.__mock.calls.some((c) => c.fn === 'exit'), 'Dismiss directly exits when CAPTCHA is None')
+  ok(calledSafeExit(), 'Dismiss directly exits when CAPTCHA is None')
 
   // Reset back to zombie for subsequent tests
   alarm.captcha.type = 'zombie'
@@ -332,7 +394,7 @@ console.log('\n6. page/ring.page.js: smart-wake check with no signal re-arms sil
   ringPage.onInit()
   ok(ringPage.state.ringing === false, 'no heart-rate rise means this check does not start ringing')
   ok(alarmMock.__mock.active.size === 1, 'a follow-up check timer is armed for ~2 minutes later')
-  ok(routerMock.__mock.calls.some((c) => c.fn === 'exit'), 'a silent check still exits so the screen does not stay on')
+  ok(calledSafeExit(), 'a silent check still exits so the screen does not stay on')
 
   ringPage.build()
   ok(uiMock.__mock.created.length === 0, 'a silent (non-ringing) check renders nothing to the screen')
@@ -358,9 +420,43 @@ console.log('\n7. page/ring.page.js: smart-wake check WITH a heart-rate rise wak
   ok(byText('Light sleep detected\nRise and shine') !== undefined, 'the early-wake screen shows the smart-wake message')
   ok(sensorMock.__mock.vibrations.some((v) => v.action === 'start'), 'vibration starts for the early wake too')
 
-  byText('Snooze 9m')._opts.click_func()
+  byText('Snooze 10m')._opts.click_func()
   ok(sensorMock.__mock.vibrations.some((v) => v.action === 'stop'), 'Snooze stops the vibration motor')
-  ok(routerMock.__mock.calls.some((c) => c.fn === 'exit'), 'Snooze exits the mini-program')
+  ok(calledSafeExit(), 'Snooze exits the mini-program')
+}
+
+console.log('\n7c. page/ring.page.js: snooze disabled (OFF) renders no snooze buttons')
+{
+  const { getAlarms } = await import('../alarm/repository.js')
+  const alarm = getAlarms()[0]
+  alarm.snooze = false
+
+  uiMock.__mock.reset()
+  routerMock.__mock.reset()
+  sensorMock.__mock.reset()
+  freshRingPageState()
+  appDef.onCreate(JSON.stringify({ id: alarm.id, mode: 'final' }))
+  ringPage.onInit()
+  ringPage.build()
+
+  ok(byText('Dismiss') !== undefined, 'Dismiss button is rendered')
+  const hasSnoozeRing = uiMock.__mock.created.some(
+    (w) => typeof w._opts.text === 'string' && w._opts.text.startsWith('Snooze')
+  )
+  ok(!hasSnoozeRing, 'no Snooze button rendered on ring screen when snooze is OFF')
+
+  // Dismiss into challenge
+  byText('Dismiss')._opts.click_func()
+  ok(ringPage.state.activeStrategy !== null, 'challenge started')
+  const hasSnoozeCaptcha = uiMock.__mock.created.some(
+    (w) => typeof w._opts.text === 'string' && w._opts.text.startsWith('Snooze')
+  )
+  ok(!hasSnoozeCaptcha, 'no Snooze button rendered on captcha screen when snooze is OFF')
+
+  // Restore snooze and cancel fallback timer for subsequent tests
+  ringPage.cancelFallbackTimer()
+  ringPage.onDestroy()
+  alarm.snooze = true
 }
 
 console.log('\n8. delete flow')
@@ -373,8 +469,13 @@ console.log('\n8. delete flow')
   editPage.onInit(`id=${alarm.id}`)
   ok(editPage.state.isNew === false, 'onInit with an existing id loads it for editing')
   editPage.build()
-  ok(byText('Del') !== undefined, 'editing an existing alarm shows a Delete button')
-  byText('Del')._opts.click_func()
+
+  const delBtn = byText('Delete Alarm')
+  ok(delBtn !== undefined, 'editing an existing alarm shows Delete Alarm button at the bottom')
+  ok(delBtn._opts.y > 450, 'Delete Alarm is positioned at the bottom of the scrollable page')
+  const backBtn = byText('< Back')
+  ok(backBtn !== undefined, 'safe < Back navigation button is rendered')
+  delBtn._opts.click_func()
   ok(getAlarms().length === 0, 'Delete removes the alarm from storage')
   ok(alarmMock.__mock.active.size === 0, 'Delete cancels its native timers')
   ok(routerMock.__mock.calls.some((c) => c.fn === 'back'), 'Delete navigates back')
@@ -400,6 +501,28 @@ console.log('\n9. captcha: Strategy interface & dynamic extensibility')
   registerCaptcha(customStrategy)
   ok(getCaptcha('math').label === 'Math Puzzle', 'new custom CAPTCHA strategy is retrievable dynamically')
   ok(getAvailableCaptchas().some((c) => c.id === 'math'), 'custom strategy is included in available captchas')
+
+  // Test ProgressiveChallengeStrategy base class
+  const { ProgressiveChallengeStrategy } = await import('../captcha/progressive-base.js')
+  class HeartRateMockStrategy extends ProgressiveChallengeStrategy {
+    constructor() {
+      super('heart_rate', 'Heart Rate Surge', {
+        title: 'PULSE RUSH',
+        subtitle: 'Raise pulse above 110 bpm',
+        unitLabel: 'CURRENT BPM',
+      })
+    }
+  }
+  const hrStrategy = new HeartRateMockStrategy()
+  ok(hrStrategy.challengeTitle === 'PULSE RUSH', 'ProgressiveChallengeStrategy sets title')
+  ok(hrStrategy.unitLabel === 'CURRENT BPM', 'ProgressiveChallengeStrategy sets unit label')
+  hrStrategy._currentValue = 85
+  hrStrategy._targetValue = 110
+  ok(hrStrategy.getCounterText() === '85 / 110', 'ProgressiveChallengeStrategy formats counter text')
+  ok(Math.round(hrStrategy.getProgress() * 100) === 77, 'ProgressiveChallengeStrategy computes progress percentage')
+  ok(!hrStrategy.isSuccess(), 'isSuccess is false when current < target')
+  hrStrategy._currentValue = 115
+  ok(hrStrategy.isSuccess(), 'isSuccess is true when current >= target')
 }
 
 console.log('\n10. ui/skins: RingSkin interface & dynamic extensibility')
@@ -418,6 +541,91 @@ console.log('\n10. ui/skins: RingSkin interface & dynamic extensibility')
   registerSkin(new CustomOledSkin())
   ok(getSkin('custom_oled').label === 'Custom OLED', 'custom skin adapter is retrievable dynamically')
   ok(getAvailableSkins().some((s) => s.id === 'custom_oled'), 'custom skin is included in available skins')
+}
+
+console.log('\n11. ui/layout.js: responsive screen adaptation (Approach A)')
+{
+  const {
+    getDevice,
+    isRoundScreen,
+    centerX,
+    centerY,
+    getSafeWidth,
+    getCenteredBounds,
+    resetDeviceCache,
+  } = await import('../ui/layout.js')
+
+  // 1. Square screen behavior (e.g. Amazfit Active 2 Square 390x450 / 432x514)
+  resetDeviceCache()
+  deviceMock.__mock.screenShape = deviceMock.SCREEN_SHAPE_SQUARE
+  ok(!isRoundScreen(), 'isRoundScreen() returns false for square screen shape')
+  ok(centerX(384, 432) === 24, 'centerX(384, 432) returns 24')
+  ok(centerY(60, 498) === 219, 'centerY(60, 498) returns 219')
+
+  // On square screens, getSafeWidth returns defaultWidth directly
+  ok(getSafeWidth(406, 56, 384) === 384, 'getSafeWidth on square screen returns unmodified defaultWidth')
+  const squareBounds = getCenteredBounds(406, 56, 384)
+  ok(squareBounds.x === 24 && squareBounds.w === 384, 'getCenteredBounds on square screen returns { x: 24, w: 384 }')
+
+  // 2. Round screen behavior (e.g. Amazfit Active 2 Round / GTR 466x466)
+  resetDeviceCache()
+  deviceMock.__mock.screenShape = deviceMock.SCREEN_SHAPE_ROUND
+  ok(isRoundScreen(), 'isRoundScreen() returns true when screenShape is ROUND')
+
+  // Near the center of the circular screen, safe width equals or approaches defaultWidth
+  const centerW = getSafeWidth(220, 50, 384)
+  ok(centerW === 384, 'getSafeWidth near the vertical center allows full default width')
+
+  // Near top or bottom curved bezel edges, safe width is geometrically constrained
+  const bottomW = getSafeWidth(420, 50, 384)
+  ok(bottomW < 384, `getSafeWidth near screen bottom is constrained: ${bottomW} < 384`)
+  const roundBounds = getCenteredBounds(420, 50, 384)
+  ok(roundBounds.w === bottomW, 'getCenteredBounds w matches getSafeWidth')
+  ok(roundBounds.x === Math.round((432 - bottomW) / 2), 'getCenteredBounds x is symmetrically centered')
+
+  // Reset mock back to square for other tests
+  resetDeviceCache()
+  deviceMock.__mock.reset()
+}
+
+console.log('\n12. utils/anti-exit.js: Strict Lock hardware button and gesture interception')
+{
+  interactionMock.__mock.reset()
+  unlockExit()
+  ok(!isExitLocked(), 'initially exit is not locked')
+
+  // Lock exit
+  lockExit()
+  ok(isExitLocked(), 'lockExit sets isExitLocked to true')
+  ok(interactionMock.__mock.calls.some((c) => c.fn === 'onKey'), 'lockExit registers onKey listener')
+  ok(interactionMock.__mock.calls.some((c) => c.fn === 'onGesture'), 'lockExit registers onGesture listener')
+
+  // In strict lock mode, any key click returns true (blocks default exit)
+  ok(interactionMock.__mock.triggerKey(interactionMock.KEY_BACK) === true, 'strict lock returns true on KEY_BACK')
+  ok(interactionMock.__mock.triggerKey(interactionMock.KEY_SELECT) === true, 'strict lock returns true on KEY_SELECT')
+  ok(interactionMock.__mock.triggerKey(interactionMock.KEY_HOME) === true, 'strict lock returns true on KEY_HOME')
+
+  // Swiping right returns true (blocks swipe-to-back)
+  ok(interactionMock.__mock.triggerGesture(interactionMock.GESTURE_RIGHT) === true, 'GESTURE_RIGHT returns true (blocks swipe-to-back)')
+  // Other gestures (e.g. GESTURE_UP) return false
+  ok(interactionMock.__mock.triggerGesture(interactionMock.GESTURE_UP) === false, 'other gestures return false')
+
+  // Custom button handler callback support
+  let customClicked = false
+  lockExit({
+    onButtonPress: (key) => {
+      customClicked = true
+      return true
+    },
+  })
+  interactionMock.__mock.triggerKey(interactionMock.KEY_SELECT)
+  ok(customClicked === true, 'custom onButtonPress callback is executed when registered')
+
+  // unlockExit cleanly deregisters listeners
+  unlockExit()
+  ok(!isExitLocked(), 'unlockExit resets isExitLocked to false')
+  ok(interactionMock.__mock.calls.some((c) => c.fn === 'offKey'), 'unlockExit invokes offKey')
+  ok(interactionMock.__mock.calls.some((c) => c.fn === 'offGesture'), 'unlockExit invokes offGesture')
 }
 
 console.log(`\nALL ${passCount} CHECKS PASSED`)

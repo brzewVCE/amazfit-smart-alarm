@@ -1,6 +1,7 @@
 import { createWidget, widget, align, text_style } from '@zos/ui'
 import { px } from '@zos/utils'
 import { COLOR, DESIGN_WIDTH, DESIGN_HEIGHT } from '../theme'
+import { getCenteredBounds } from '../layout'
 import { RingSkin } from './base'
 
 /**
@@ -11,7 +12,10 @@ export class ClassicRingSkin extends RingSkin {
     super('classic', 'Classic Zepp')
   }
 
-  renderRing(ctx, { timeStr, message, isWarning, snoozeMinutes, onSnooze, onDismiss }) {
+  renderRing(
+    ctx,
+    { timeStr, message, isWarning, snoozeMinutes, snoozeEnabled = true, onSnooze, onDismiss }
+  ) {
     const { tracker } = ctx
 
     // Background
@@ -57,37 +61,56 @@ export class ClassicRingSkin extends RingSkin {
       })
     )
 
-    // Snooze action button
-    tracker.track(
-      createWidget(widget.BUTTON, {
-        x: px(40),
-        y: px(370),
-        w: px(160),
-        h: px(90),
-        radius: px(20),
-        normal_color: COLOR.surfaceAlt,
-        press_color: COLOR.border,
-        text: `Snooze ${snoozeMinutes}m`,
-        text_size: px(22),
-        click_func: onSnooze,
-      })
-    )
+    if (snoozeEnabled !== false) {
+      // Snooze action button
+      tracker.track(
+        createWidget(widget.BUTTON, {
+          x: px(40),
+          y: px(370),
+          w: px(160),
+          h: px(90),
+          radius: px(20),
+          normal_color: COLOR.surfaceAlt,
+          press_color: COLOR.border,
+          text: `Snooze ${snoozeMinutes}m`,
+          text_size: px(22),
+          click_func: onSnooze,
+        })
+      )
 
-    // Dismiss action button
-    tracker.track(
-      createWidget(widget.BUTTON, {
-        x: px(232),
-        y: px(370),
-        w: px(160),
-        h: px(90),
-        radius: px(20),
-        normal_color: COLOR.primary,
-        press_color: COLOR.primaryDim,
-        text: 'Dismiss',
-        text_size: px(26),
-        click_func: onDismiss,
-      })
-    )
+      // Dismiss action button (right side)
+      tracker.track(
+        createWidget(widget.BUTTON, {
+          x: px(232),
+          y: px(370),
+          w: px(160),
+          h: px(90),
+          radius: px(20),
+          normal_color: COLOR.primary,
+          press_color: COLOR.primaryDim,
+          text: 'Dismiss',
+          text_size: px(26),
+          click_func: onDismiss,
+        })
+      )
+    } else {
+      // Dismiss action button (centered, prominent when snooze is disabled)
+      const dismissBounds = getCenteredBounds(370, 90, 320)
+      tracker.track(
+        createWidget(widget.BUTTON, {
+          x: px(dismissBounds.x),
+          y: px(370),
+          w: px(dismissBounds.w),
+          h: px(90),
+          radius: px(20),
+          normal_color: COLOR.primary,
+          press_color: COLOR.primaryDim,
+          text: 'Dismiss',
+          text_size: px(28),
+          click_func: onDismiss,
+        })
+      )
+    }
   }
 
   renderSuccess(ctx, { message = 'Great job!\nAlarm dismissed.' } = {}) {

@@ -48,7 +48,11 @@ export function computeNextTimestamp(hour, minute, days, from = new Date()) {
 }
 
 function cancelIfSet(id) {
-  if (id) cancel(id)
+  if (id) {
+    try {
+      cancel(id)
+    } catch (e) {}
+  }
 }
 
 /**
@@ -56,9 +60,12 @@ function cancelIfSet(id) {
  * @param {import('./model').Alarm} alarm
  */
 export function cancelNative(alarm) {
-  cancelIfSet(alarm.nativeIds && alarm.nativeIds.final)
-  cancelIfSet(alarm.nativeIds && alarm.nativeIds.check)
-  alarm.nativeIds = { final: 0, check: 0 }
+  if (!alarm) return
+  try {
+    cancelIfSet(alarm.nativeIds && alarm.nativeIds.final)
+    cancelIfSet(alarm.nativeIds && alarm.nativeIds.check)
+    alarm.nativeIds = { final: 0, check: 0 }
+  } catch (e) {}
 }
 
 /**
@@ -133,14 +140,17 @@ export function scheduleNextCheck(alarm, checksRemaining, finalTime) {
  * @param {import('./model').Alarm} alarm
  */
 export function rearmAfterRing(alarm) {
-  cancelNative(alarm)
+  if (!alarm) return
+  try {
+    cancelNative(alarm)
 
-  if (alarm.days) {
-    scheduleAlarm(alarm)
-  } else {
-    alarm.enabled = false
-    upsertAlarm(alarm)
-  }
+    if (alarm.days) {
+      scheduleAlarm(alarm)
+    } else {
+      alarm.enabled = false
+      upsertAlarm(alarm)
+    }
+  } catch (e) {}
 }
 
 /**

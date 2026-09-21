@@ -185,53 +185,78 @@
       <strong>💡 Why .zab failed earlier:</strong> The previous <code>.zab</code> file was a multi-device bundle meant for the Zepp Store. Gadgetbridge requires the direct <strong>.zpk</strong> or <strong>.zip</strong> package extracted for your specific screen.
     </div>
 
-    <!-- Active 2 Square -->
-    <div class="card">
-      <div class="card-title">
-        <span>📱</span> Amazfit Active 2 (Square - 390×450)
+    <!-- Universal Package (All Watches: Square & Round) -->
+    <div class="card" style="border: 2px solid var(--primary); background: linear-gradient(180deg, #18233c 0%, #151d30 100%);">
+      <div class="card-title" style="color: var(--primary);">
+        <span>✨</span> <strong>Universal Installer (All Amazfit Watches)</strong>
       </div>
-      <p class="card-desc">For square / rectangular models (e.g. Active 2 Square / NFC).</p>
+      <p class="card-desc">
+        <strong>One package for all watches!</strong> Automatically adapts to Active 2 Square (390×450), Active 2 Round (466×466), Bip Max, and GTR series at runtime.
+      </p>
 
-      <a href="/download/square-zpk" class="btn btn-primary" download="{{ square_zpk_name }}">
-        <span>⬇️</span> Download .zpk (Recommended) ({{ square_zpk_size }} KB)
+      <a href="/download/universal-zpk" class="btn btn-primary" download="{{ universal_zpk_name }}" style="background: var(--primary); color: #0b0f19; font-size: 15px; padding: 15px;">
+        <span>⬇️</span> Download Universal .zpk (Recommended) ({{ universal_zpk_size }} KB)
       </a>
 
-      <a href="/download/square-zip" class="btn btn-secondary" download="{{ square_direct_name }}">
-        <span>📦</span> Download direct .zip ({{ square_direct_size }} KB)
+      <a href="/download/universal-zip" class="btn btn-secondary" download="{{ universal_direct_name }}">
+        <span>📦</span> Download direct .zip ({{ universal_direct_size }} KB)
       </a>
     </div>
 
-    <!-- Active 2 Round -->
-    <div class="card">
-      <div class="card-title">
-        <span>⌚</span> Amazfit Active 2 (Round - 466×466)
+    <!-- Legacy / Model-specific packages -->
+    <details style="margin-bottom: 20px;">
+      <summary style="cursor: pointer; color: var(--text-muted); font-size: 13px; margin-bottom: 14px; text-align: center;">
+        ⚙️ Legacy model-specific packages (Optional)
+      </summary>
+
+      <!-- Active 2 Square -->
+      <div class="card">
+        <div class="card-title">
+          <span>📱</span> Amazfit Active 2 (Square - 390×450)
+        </div>
+        <p class="card-desc">For square / rectangular models (e.g. Active 2 Square / NFC).</p>
+
+        <a href="/download/square-zpk" class="btn btn-primary" download="{{ square_zpk_name }}">
+          <span>⬇️</span> Download .zpk ({{ square_zpk_size }} KB)
+        </a>
+
+        <a href="/download/square-zip" class="btn btn-secondary" download="{{ square_direct_name }}">
+          <span>📦</span> Download direct .zip ({{ square_direct_size }} KB)
+        </a>
       </div>
-      <p class="card-desc">For round bezel models (e.g. Active 2 Round / NFC).</p>
 
-      <a href="/download/round-zpk" class="btn btn-primary" download="{{ round_zpk_name }}">
-        <span>⬇️</span> Download .zpk (Recommended) ({{ round_zpk_size }} KB)
-      </a>
+      <!-- Active 2 Round -->
+      <div class="card">
+        <div class="card-title">
+          <span>⌚</span> Amazfit Active 2 (Round - 466×466)
+        </div>
+        <p class="card-desc">For round bezel models (e.g. Active 2 Round / NFC).</p>
 
-      <a href="/download/round-zip" class="btn btn-secondary" download="{{ round_direct_name }}">
-        <span>📦</span> Download direct .zip ({{ round_direct_size }} KB)
-      </a>
-    </div>
+        <a href="/download/round-zpk" class="btn btn-primary" download="{{ round_zpk_name }}">
+          <span>⬇️</span> Download .zpk ({{ round_zpk_size }} KB)
+        </a>
 
-    <!-- Bip Max Square -->
-    <div class="card">
-      <div class="card-title">
-        <span>📱</span> Amazfit Bip Max (Square - 432×514)
+        <a href="/download/round-zip" class="btn btn-secondary" download="{{ round_direct_name }}">
+          <span>📦</span> Download direct .zip ({{ round_direct_size }} KB)
+        </a>
       </div>
-      <p class="card-desc">For larger rectangular models (e.g. Bip Max / Bip 5).</p>
 
-      <a href="/download/bip-zpk" class="btn btn-primary" download="{{ bip_zpk_name }}">
-        <span>⬇️</span> Download .zpk ({{ bip_zpk_size }} KB)
-      </a>
+      <!-- Bip Max Square -->
+      <div class="card">
+        <div class="card-title">
+          <span>📱</span> Amazfit Bip Max (Square - 432×514)
+        </div>
+        <p class="card-desc">For larger rectangular models (e.g. Bip Max / Bip 5).</p>
 
-      <a href="/download/bip-zip" class="btn btn-secondary" download="{{ bip_direct_name }}">
-        <span>📦</span> Download direct .zip ({{ bip_direct_size }} KB)
-      </a>
-    </div>
+        <a href="/download/bip-zpk" class="btn btn-primary" download="{{ bip_zpk_name }}">
+          <span>⬇️</span> Download .zpk ({{ bip_zpk_size }} KB)
+        </a>
+
+        <a href="/download/bip-zip" class="btn btn-secondary" download="{{ bip_direct_name }}">
+          <span>📦</span> Download direct .zip ({{ bip_direct_size }} KB)
+        </a>
+      </div>
+    </details>
 
     <div class="card">
       <div class="steps-title">

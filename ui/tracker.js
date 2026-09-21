@@ -26,7 +26,11 @@ export class WidgetTracker {
    */
   clear() {
     for (let i = 0; i < this.widgets.length; i++) {
-      deleteWidget(this.widgets[i])
+      try {
+        if (this.widgets[i]) {
+          deleteWidget(this.widgets[i])
+        }
+      } catch (e) {}
     }
     this.widgets = []
   }

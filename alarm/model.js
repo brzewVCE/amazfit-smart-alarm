@@ -14,9 +14,12 @@
  * @property {boolean} enabled - active state
  * @property {boolean} smart - light-sleep smart-wake enabled
  * @property {number} smartWindow - minutes (10, 20, 30)
+ * @property {number} [snoozeMinutes] - snooze duration in minutes
  * @property {CaptchaConfig} captcha - challenge configuration
  * @property {{ final: number, check: number }} nativeIds - native @zos/alarm ids, 0 = none
  */
+
+import { DEFAULT_SNOOZE_MINUTES } from './constants'
 
 export const DEFAULT_CAPTCHA_CONFIG = {
   type: 'zombie',
@@ -25,7 +28,7 @@ export const DEFAULT_CAPTCHA_CONFIG = {
 }
 
 /**
- * Ensures backwards compatibility for legacy alarm records missing captcha fields.
+ * Ensures backwards compatibility for legacy alarm records missing captcha or snooze fields.
  * @param {Alarm} alarm
  * @returns {Alarm}
  */
@@ -33,6 +36,12 @@ export function normalizeAlarm(alarm) {
   if (!alarm) return alarm
   if (!alarm.captcha) {
     alarm.captcha = { ...DEFAULT_CAPTCHA_CONFIG }
+  }
+  if (typeof alarm.snooze === 'undefined') {
+    alarm.snooze = true
+  }
+  if (!alarm.snoozeMinutes) {
+    alarm.snoozeMinutes = DEFAULT_SNOOZE_MINUTES
   }
   return alarm
 }
@@ -51,6 +60,8 @@ export function createDraftAlarm() {
     enabled: true,
     smart: false,
     smartWindow: 20,
+    snooze: true,
+    snoozeMinutes: DEFAULT_SNOOZE_MINUTES,
     captcha: { ...DEFAULT_CAPTCHA_CONFIG },
     nativeIds: { final: 0, check: 0 },
   }

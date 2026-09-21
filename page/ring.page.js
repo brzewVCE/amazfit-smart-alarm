@@ -1,7 +1,12 @@
-import { exit } from '@zos/router'
+import { exit, home, back } from '@zos/router'
 import { px } from '@zos/utils'
 import { Vibrator, VIBRATOR_SCENE_CALL } from '@zos/sensor'
 import { set as setNativeAlarm, cancel as cancelNativeAlarm } from '@zos/alarm'
+import {
+  setPageBrightTime,
+  pauseDropWristScreenOff,
+  resetDropWristScreenOff,
+} from '@zos/display'
 import {
   getAlarmById,
   scheduleNextCheck,
@@ -9,13 +14,47 @@ import {
   snooze,
   checkForWakeSignal,
   SNOOZE_MINUTES,
+  DEFAULT_SNOOZE_MINUTES,
 } from '../alarm'
 import { COLOR, formatTime, WidgetTracker, getSkin } from '../ui'
 import { getCaptcha } from '../captcha'
+import { lockExit, unlockExit } from '../utils/anti-exit'
 
 function getCurrentClockTime() {
   const now = new Date()
   return formatTime(now.getHours(), now.getMinutes())
+}
+
+/**
+ * Safely exits the ring application back to the watch face.
+ * Uses home() first (standard for Zepp OS alarm wake-ups) to prevent
+ * watchdog reboots caused by empty activity launcher stacks.
+ */
+function safeExit() {
+  try {
+    unlockExit()
+  } catch (e) {}
+  try {
+    resetDropWristScreenOff()
+  } catch (e) {}
+  try {
+    if (typeof home === 'function') {
+      home()
+      return
+    }
+  } catch (e) {}
+  try {
+    if (typeof exit === 'function') {
+      exit()
+      return
+    }
+  } catch (e) {}
+  try {
+    if (typeof back === 'function') {
+      back()
+      return
+    }
+  } catch (e) {}
 }
 
 Page({
@@ -30,14 +69,24 @@ Page({
     fallbackAlarmId: null,
   },
 
-  onInit() {
-    const globalData = getApp()._options.globalData
-    const wake = globalData.wakeParams
-    globalData.wakeParams = null // consume so subsequent manual launch starts clean
+  onInit(param) {
+    let wake = null
+    if (param) {
+      try {
+        wake = typeof param === 'string' ? JSON.parse(param) : param
+      } catch (e) {}
+    }
+    if (!wake) {
+      try {
+        const globalData = getApp()._options.globalData
+        wake = globalData.wakeParams
+        globalData.wakeParams = null // consume so subsequent manual launch starts clean
+      } catch (e) {}
+    }
     this.state.wake = wake
 
     if (!wake || !wake.id) {
-      exit()
+      safeExit()
       return
     }
 
@@ -45,7 +94,7 @@ Page({
     this.state.alarm = alarm
 
     if (!alarm || !alarm.enabled) {
-      exit()
+      safeExit()
       return
     }
 
@@ -58,7 +107,7 @@ Page({
         if (remaining > 0 && nowSec < wake.finalTime) {
           scheduleNextCheck(alarm, remaining, wake.finalTime)
         }
-        exit()
+        safeExit()
       }
     } else if (wake.mode === 'captcha-fail') {
       // Re-woken by OS fallback timer because user did not complete challenge in time
@@ -74,6 +123,17 @@ Page({
 
     this.clearWidgets()
 
+    // Keep screen on and pause wrist drop screen off while alarm is ringing!
+    try {
+      setPageBrightTime({ brightTime: 120000 })
+      pauseDropWristScreenOff({ duration: 120000 })
+    } catch (e) {}
+
+    // Strict Anti-Exit Lock: block physical buttons and swipe gestures during ringing
+    try {
+      lockExit()
+    } catch (e) {}
+
     const early = this.state.wake && this.state.wake.mode === 'smart-check'
     const failedCaptcha = this.state.captchaFailed
 
@@ -84,51 +144,93 @@ Page({
       wakeMessage = 'Challenge not finished!\nWake up!'
     }
 
-    // Render the watch face appearance using the configured Skin adapter
-    const skin = getSkin(this.state.alarm?.skin || 'classic')
-    skin.renderRing(
-      { tracker: this.state.tracker, px },
-      {
-        timeStr: getCurrentClockTime(),
-        message: wakeMessage,
-        isWarning: failedCaptcha,
-        snoozeMinutes: SNOOZE_MINUTES,
-        onSnooze: () => this.onSnooze(),
-        onDismiss: () => this.onDismiss(),
+    const snoozeEnabled =
+      this.state.alarm && typeof this.state.alarm.snooze === 'boolean'
+        ? this.state.alarm.snooze
+        : true
+    const snoozeMin =
+      (this.state.alarm && this.state.alarm.snoozeMinutes) || DEFAULT_SNOOZE_MINUTES
+
+    // Auto-snooze safety timer: if no user interaction after 120s of ringing, postpone or re-arm
+    if (this._autoSnoozeTimer) {
+      clearTimeout(this._autoSnoozeTimer)
+      this._autoSnoozeTimer = null
+    }
+    this._autoSnoozeTimer = setTimeout(() => {
+      if (this.state.ringing) {
+        if (snoozeEnabled) {
+          this.onSnooze()
+        } else {
+          rearmAfterRing(this.state.alarm)
+          safeExit()
+        }
       }
-    )
+    }, 120000)
+
+    // Render the watch face appearance using the configured Skin adapter
+    try {
+      const skin = getSkin(this.state.alarm?.skin || 'classic')
+      skin.renderRing(
+        { tracker: this.state.tracker, px },
+        {
+          timeStr: getCurrentClockTime(),
+          message: wakeMessage,
+          isWarning: failedCaptcha,
+          snoozeMinutes: snoozeMin,
+          snoozeEnabled,
+          onSnooze: () => this.onSnooze(),
+          onDismiss: () => this.onDismiss(),
+        }
+      )
+    } catch (e) {}
 
     this.startVibration()
   },
 
   startVibration() {
-    if (!this.state.vibrator) {
-      const vibrator = new Vibrator()
-      vibrator.setMode(VIBRATOR_SCENE_CALL)
-      vibrator.start()
-      this.state.vibrator = vibrator
-    }
+    try {
+      if (!this.state.vibrator) {
+        this.state.vibrator = new Vibrator()
+      }
+      if (this.state.vibrator) {
+        try {
+          this.state.vibrator.setMode(VIBRATOR_SCENE_CALL)
+        } catch (e) {}
+        this.state.vibrator.start()
+      }
+    } catch (e) {}
   },
 
   stopVibration() {
     if (this.state.vibrator) {
-      this.state.vibrator.stop()
-      this.state.vibrator = null
+      try {
+        this.state.vibrator.stop()
+      } catch (e) {}
     }
   },
 
   onSnooze() {
+    if (this._autoSnoozeTimer) {
+      clearTimeout(this._autoSnoozeTimer)
+      this._autoSnoozeTimer = null
+    }
     this.cancelFallbackTimer()
     if (this.state.activeStrategy) {
       this.state.activeStrategy.cleanup(true)
       this.state.activeStrategy = null
     }
     this.stopVibration()
-    snooze(this.state.alarm, SNOOZE_MINUTES)
-    exit()
+    const snoozeMin =
+      (this.state.alarm && this.state.alarm.snoozeMinutes) || DEFAULT_SNOOZE_MINUTES
+    snooze(this.state.alarm, snoozeMin)
+    safeExit()
   },
 
   onDismiss() {
+    if (this._autoSnoozeTimer) {
+      clearTimeout(this._autoSnoozeTimer)
+      this._autoSnoozeTimer = null
+    }
     const type =
       (this.state.alarm && this.state.alarm.captcha && this.state.alarm.captcha.type) || 'none'
     const strategy = getCaptcha(type)
@@ -138,7 +240,7 @@ Page({
       this.cancelFallbackTimer()
       this.stopVibration()
       rearmAfterRing(this.state.alarm)
-      exit()
+      safeExit()
       return
     }
 
@@ -161,10 +263,13 @@ Page({
 
   armFallbackTimer(timeoutSec) {
     const nowSec = Math.floor(Date.now() / 1000)
+    // Add 15s grace period so native watchdog timer never fires while
+    // the app is in foreground and handling its own in-app countdown.
+    const watchdogSec = timeoutSec + 15
     try {
       this.state.fallbackAlarmId = setNativeAlarm({
         url: 'page/ring.page',
-        time: nowSec + timeoutSec,
+        time: nowSec + watchdogSec,
         store: true,
         param: JSON.stringify({ id: this.state.alarm.id, mode: 'captcha-fail' }),
       })
@@ -172,9 +277,12 @@ Page({
   },
 
   cancelFallbackTimer() {
-    if (this.state.fallbackAlarmId) {
-      try { cancelNativeAlarm(this.state.fallbackAlarmId) } catch (e) {}
-      this.state.fallbackAlarmId = null
+    const id = this.state.fallbackAlarmId
+    this.state.fallbackAlarmId = null
+    if (id !== null && id !== undefined && id > 0) {
+      try {
+        cancelNativeAlarm(id)
+      } catch (e) {}
     }
   },
 
@@ -184,34 +292,29 @@ Page({
   onCaptchaSuccess() {
     this.cancelFallbackTimer()
     if (this.state.activeStrategy) {
-      this.state.activeStrategy.cleanup(true)
+      try {
+        this.state.activeStrategy.cleanup(true)
+      } catch (e) {}
       this.state.activeStrategy = null
     }
     this.stopVibration()
     this.clearWidgets()
 
     const skin = getSkin(this.state.alarm?.skin || 'classic')
-    skin.renderSuccess(
-      { tracker: this.state.tracker, px },
-      { message: '✓ AWAKE!\nChallenge complete' }
-    )
-
-    // Brief confirmation vibration safely tracked on state.vibrator
     try {
-      const vibrator = new Vibrator()
-      vibrator.setMode(VIBRATOR_SCENE_CALL)
-      vibrator.start()
-      this.state.vibrator = vibrator
-      this._hapticTimer = setTimeout(() => {
-        this.stopVibration()
-      }, 300)
+      skin.renderSuccess(
+        { tracker: this.state.tracker, px },
+        { message: '✓ AWAKE!\nChallenge complete' }
+      )
     } catch (e) {}
 
-    rearmAfterRing(this.state.alarm)
+    try {
+      rearmAfterRing(this.state.alarm)
+    } catch (e) {}
 
     this._exitTimer = setTimeout(() => {
       this.stopVibration()
-      exit()
+      safeExit()
     }, 1500)
   },
 
@@ -221,11 +324,28 @@ Page({
   onCaptchaFail() {
     this.cancelFallbackTimer()
     if (this.state.activeStrategy) {
-      this.state.activeStrategy.cleanup(true)
+      try {
+        this.state.activeStrategy.cleanup(true)
+      } catch (e) {}
       this.state.activeStrategy = null
     }
     this.state.captchaFailed = true
-    this.build()
+    this.state.ringing = true
+
+    // Re-arm screen brightness, pause wrist-drop screen off, and lock exit immediately
+    try {
+      setPageBrightTime({ brightTime: 120000 })
+      pauseDropWristScreenOff({ duration: 120000 })
+    } catch (e) {}
+    try {
+      lockExit()
+    } catch (e) {}
+
+    try {
+      this.build()
+    } catch (e) {
+      this.startVibration()
+    }
   },
 
   clearWidgets() {
@@ -237,6 +357,10 @@ Page({
   },
 
   onDestroy() {
+    if (this._autoSnoozeTimer) {
+      clearTimeout(this._autoSnoozeTimer)
+      this._autoSnoozeTimer = null
+    }
     if (this._hapticTimer) {
       clearTimeout(this._hapticTimer)
       this._hapticTimer = null
@@ -245,7 +369,14 @@ Page({
       clearTimeout(this._exitTimer)
       this._exitTimer = null
     }
+    try {
+      unlockExit()
+    } catch (e) {}
     this.stopVibration()
+    this.state.vibrator = null
+    try {
+      resetDropWristScreenOff()
+    } catch (e) {}
     if (this.state.activeStrategy) {
       // Clean up challenge runtime UI and sensors, but keep fallback OS alarm
       // active so the alarm rings if the user closed the app without solving!

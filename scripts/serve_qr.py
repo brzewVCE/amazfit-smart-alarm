@@ -7,6 +7,8 @@ Extracts individual .zpk and direct .zip packages from .zab and serves them over
 import argparse
 import glob
 import http.server
+import io
+import json
 import os
 import shutil
 import socket
@@ -171,6 +173,65 @@ def unpack_packages(dist_dir):
                 "direct_size_kb": f"{os.path.getsize(direct_path) / 1024.0:.1f}" if os.path.exists(direct_path) else "0.0",
             }
 
+        # Generate Universal Package combining all platform IDs into one auto-adapting .zpk
+        if packages:
+            primary_key = "square" if "square" in packages else list(packages.keys())[0]
+            primary_pkg = packages[primary_key]
+            try:
+                repo_root = os.path.abspath(os.path.join(dist_dir, ".."))
+                app_json_path = os.path.join(repo_root, "app.json")
+                all_platforms = []
+                seen_sources = set()
+                if os.path.exists(app_json_path):
+                    with open(app_json_path, "r", encoding="utf-8") as af:
+                        root_cfg = json.load(af)
+                    for tname, tcfg in root_cfg.get("targets", {}).items():
+                        for p in tcfg.get("platforms", []):
+                            ds = p.get("deviceSource")
+                            if ds and ds not in seen_sources:
+                                seen_sources.add(ds)
+                                all_platforms.append(p)
+
+                if all_platforms:
+                    with zipfile.ZipFile(primary_pkg["zpk_path"], "r") as z_in:
+                        device_zip_bytes = z_in.read("device.zip")
+                        app_side_bytes = z_in.read("app-side.zip") if "app-side.zip" in z_in.namelist() else None
+
+                    with zipfile.ZipFile(io.BytesIO(device_zip_bytes), "r") as d_in:
+                        d_out_buf = io.BytesIO()
+                        with zipfile.ZipFile(d_out_buf, "w", compression=zipfile.ZIP_DEFLATED) as d_out:
+                            for item in d_in.namelist():
+                                c = d_in.read(item)
+                                if item == "app.json":
+                                    inner_cfg = json.loads(c.decode("utf-8"))
+                                    inner_cfg["platforms"] = all_platforms
+                                    c = json.dumps(inner_cfg, indent=2).encode("utf-8")
+                                d_out.writestr(item, c)
+                        new_device_zip = d_out_buf.getvalue()
+
+                    univ_direct_name = "Smart_Alarm-Universal-direct.zip"
+                    univ_direct_path = os.path.join(dist_dir, univ_direct_name)
+                    with open(univ_direct_path, "wb") as f:
+                        f.write(new_device_zip)
+
+                    univ_zpk_name = "Smart_Alarm-Universal.zpk"
+                    univ_zpk_path = os.path.join(dist_dir, univ_zpk_name)
+                    with zipfile.ZipFile(univ_zpk_path, "w", compression=zipfile.ZIP_DEFLATED) as u_out:
+                        u_out.writestr("device.zip", new_device_zip)
+                        if app_side_bytes:
+                            u_out.writestr("app-side.zip", app_side_bytes)
+
+                    packages["universal"] = {
+                        "zpk_name": univ_zpk_name,
+                        "zpk_path": univ_zpk_path,
+                        "zpk_size_kb": f"{os.path.getsize(univ_zpk_path) / 1024.0:.1f}",
+                        "direct_name": univ_direct_name,
+                        "direct_path": univ_direct_path,
+                        "direct_size_kb": f"{os.path.getsize(univ_direct_path) / 1024.0:.1f}",
+                    }
+            except Exception as e:
+                pass
+
     return packages
 
 def render_html_template(template_path, context):
@@ -184,6 +245,11 @@ def render_html_template(template_path, context):
 def create_handler(packages, template_path):
     # Route mapping: path -> (filepath, download_filename, content_type)
     DOWNLOAD_ROUTES = {}
+
+    if "universal" in packages:
+        un = packages["universal"]
+        DOWNLOAD_ROUTES["/download/universal-zpk"] = (un["zpk_path"], un["zpk_name"], "application/octet-stream")
+        DOWNLOAD_ROUTES["/download/universal-zip"] = (un["direct_path"], un["direct_name"], "application/zip")
 
     if "square" in packages:
         sq = packages["square"]
@@ -201,6 +267,10 @@ def create_handler(packages, template_path):
         DOWNLOAD_ROUTES["/download/bip-zip"] = (bp["direct_path"], bp["direct_name"], "application/zip")
 
     context = {
+        "universal_zpk_name": packages.get("universal", {}).get("zpk_name", "Smart_Alarm-Universal.zpk"),
+        "universal_zpk_size": packages.get("universal", {}).get("zpk_size_kb", "31.0"),
+        "universal_direct_name": packages.get("universal", {}).get("direct_name", "Smart_Alarm-Universal-direct.zip"),
+        "universal_direct_size": packages.get("universal", {}).get("direct_size_kb", "31.0"),
         "square_zpk_name": packages.get("square", {}).get("zpk_name", "Smart_Alarm-Active2_Square.zpk"),
         "square_zpk_size": packages.get("square", {}).get("zpk_size_kb", "15.0"),
         "square_direct_name": packages.get("square", {}).get("direct_name", "Smart_Alarm-Active2_Square-direct.zip"),
@@ -304,8 +374,9 @@ def main():
     print("=" * 64)
     print("⌚ SMART ALARM - GADGETBRIDGE INSTALLER")
     print("=" * 64)
-    for target_key, pkg in packages.items():
-        print(f"📦 [{target_key.upper()}]: {pkg['zpk_name']} ({pkg['zpk_size_kb']} KB)")
+    for target_key, pkg in sorted(packages.items(), key=lambda x: (0 if x[0] == "universal" else 1)):
+        tag = "🌟 [UNIVERSAL]:" if target_key == "universal" else f"📦 [{target_key.upper()}]:"
+        print(f"{tag:<16} {pkg['zpk_name']} ({pkg['zpk_size_kb']} KB)")
     print(f"🌐 URL:     {url}")
     print("📲 Scan this QR code with your phone camera (ensure you are on the same Wi-Fi network):")
     print("-" * 64)

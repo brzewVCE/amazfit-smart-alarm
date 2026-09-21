@@ -17,6 +17,10 @@ export function exit() {
   __mock.calls.push({ fn: 'exit' })
 }
 
+export function home() {
+  __mock.calls.push({ fn: 'home' })
+}
+
 export function replace(opts) {
   __mock.calls.push({ fn: 'replace', opts })
 }

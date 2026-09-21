@@ -1,3 +1,8 @@
+import { createWidget, widget } from '@zos/ui'
+import { px } from '@zos/utils'
+import { COLOR, getCenteredBounds } from '../ui'
+import { DEFAULT_SNOOZE_MINUTES } from '../alarm'
+
 /**
  * Base contract / interface for CAPTCHA challenge strategies (Strategy / Adapter pattern).
  * All challenge types (None, Zombie Walk, Math Quiz, Shake, etc.) must implement this interface.
@@ -6,6 +11,65 @@ export class CaptchaStrategy {
   constructor(id, label) {
     this.id = id
     this.label = label
+  }
+
+  /**
+   * Helper to check if snooze is enabled for the active alarm.
+   * @param {Object} options - start() options object containing alarm
+   * @returns {boolean}
+   */
+  isSnoozeEnabled(options) {
+    return options && options.alarm && typeof options.alarm.snooze === 'boolean'
+      ? options.alarm.snooze
+      : true
+  }
+
+  /**
+   * Helper to get configured snooze duration in minutes.
+   * @param {Object} options - start() options object containing alarm
+   * @returns {number}
+   */
+  getSnoozeMinutes(options) {
+    return (options && options.alarm && options.alarm.snoozeMinutes) || DEFAULT_SNOOZE_MINUTES
+  }
+
+  /**
+   * Generic snooze button renderer for any CAPTCHA challenge.
+   * Automatically respects alarm.snooze on/off, formats duration, uses responsive bounds,
+   * and cleans up challenge state before invoking options.onSnooze().
+   *
+   * @param {Object} options - start() options object { trackWidget, alarm, onSnooze }
+   * @param {Object} [bounds] - optional custom bounds { x, y, w, h }
+   * @returns {Object|null} created widget reference or null if snooze disabled
+   */
+  renderSnoozeButton(options, bounds) {
+    if (!options || !this.isSnoozeEnabled(options)) {
+      return null
+    }
+
+    const defaultBounds = getCenteredBounds(382, 64, 220)
+    const b = bounds || defaultBounds
+    const minutes = this.getSnoozeMinutes(options)
+
+    return options.trackWidget(
+      createWidget(widget.BUTTON, {
+        x: px(b.x),
+        y: px(b.y !== undefined ? b.y : 382),
+        w: px(b.w),
+        h: px(b.h !== undefined ? b.h : 64),
+        radius: px(18),
+        normal_color: COLOR.surface,
+        press_color: COLOR.border,
+        text: `Snooze ${minutes}m`,
+        text_size: px(22),
+        click_func: () => {
+          this.cleanup(true)
+          if (options && options.onSnooze) {
+            options.onSnooze()
+          }
+        },
+      })
+    )
   }
 
   /**

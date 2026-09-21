@@ -166,9 +166,20 @@ device-specific rendering/layout issues - only the official simulator or a
 real watch can - but it does catch logic regressions and crashes across the
 whole codebase on every change, with no external dependencies.
 
+## Community Inspiration & Benchmarks
+
+- **AlarmZone (Zepp OS App ID: 1100448)**:
+  - Reddit announcement & discussion: [I built a better alarm app for Zepp OS, I promise you won't sleep through it](https://www.reddit.com/r/amazfit/comments/1rgq7hi/i_built_a_better_alarm_app_for_zepp_os_i_promise/) by developer `u/MarcDoria`
+  - Follow-up user feedback thread: [I promised you'd wake up: 200+ of you are actively waking up with AlarmZone](https://www.reddit.com/r/amazfit/comments/1rmx7jj/i_promised_youd_wake_up_200_of_you_are_actively/)
+  - **Key inspirations & takeaways**:
+    - **Anti-Exit Defenses**: Preventing groggy users from dismissing alarms by simply pressing the watch's physical crown/side button or swiping back. Achieved on Zepp OS via `@zos/interaction` (`onKey` and `onGesture` returning `true` to block OS navigation) coupled with persistent watchdog fallback alarms (`@zos/alarm`).
+    - **Interactive Wake Challenges (CAPTCHAs)**: Math equations, shake-to-wake, and step counting challenges to ensure cognitive arousal before silencing the alarm.
+    - **Community-driven ergonomics**: High-contrast, sleepy-friendly UI, dedicated vibration patterns, and customizable snooze intervals.
+
 ## References
 
 - Zepp OS API reference & guides: https://docs.zepp.com/docs/intro/version/
 - Sample apps: https://github.com/zepp-health/zeppos-samples
 - Amazfit Bip 6 practical notes (device family background):
   https://github.com/masimoneext-sketch/amazfit-bip6-watchface-guide
+- AlarmZone Community Thread: https://www.reddit.com/r/amazfit/comments/1rgq7hi/i_built_a_better_alarm_app_for_zepp_os_i_promise/
