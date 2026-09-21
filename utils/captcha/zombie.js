@@ -1,7 +1,6 @@
 import { createWidget, widget, align, text_style } from '@zos/ui'
 import { px } from '@zos/utils'
 import { Step } from '@zos/sensor'
-import { set as setNativeAlarm, cancel as cancelNativeAlarm } from '@zos/alarm'
 import {
   setPageBrightTime,
   pauseDropWristScreenOff,
@@ -24,7 +23,6 @@ import {
 /**
  * Zombie Walk CAPTCHA challenge strategy:
  * Requires the user to walk a specified number of steps to permanently dismiss the alarm.
- * A fallback OS alarm ensures the alarm rings again if steps are not completed within the timeout.
  */
 class ZombieWalkStrategy {
   constructor() {
@@ -39,7 +37,6 @@ class ZombieWalkStrategy {
     this._targetSteps = DEFAULT_ZOMBIE_STEPS
     this._remainingSeconds = DEFAULT_ZOMBIE_TIMEOUT_SEC
     this._timerId = null
-    this._fallbackAlarmId = null
   }
 
   getDefaultConfig() {
@@ -238,20 +235,7 @@ class ZombieWalkStrategy {
     this._remainingSeconds = config.timeoutSec || DEFAULT_ZOMBIE_TIMEOUT_SEC
     this._currentSteps = 0
 
-    // 1. Arm fallback native alarm so if user turns off screen or kills app, it rings again
-    const nowSec = Math.floor(Date.now() / 1000)
-    try {
-      this._fallbackAlarmId = setNativeAlarm({
-        url: 'page/ring.page',
-        time: nowSec + this._remainingSeconds,
-        store: true,
-        param: JSON.stringify({ id: ctx.alarm.id, mode: 'zombie-fail' }),
-      })
-    } catch (e) {
-      // Non-fatal if scheduling fails in test/mock environment
-    }
-
-    // 2. Initialize Step sensor
+    // 1. Initialize Step sensor
     try {
       this._stepSensor = new Step()
       this._initialSteps = this._stepSensor.getCurrent() || 0
@@ -451,7 +435,7 @@ class ZombieWalkStrategy {
     }
   }
 
-  cleanup(cancelAlarm = false) {
+  cleanup() {
     if (this._timerId) {
       clearInterval(this._timerId)
       this._timerId = null
@@ -460,11 +444,6 @@ class ZombieWalkStrategy {
     if (this._stepSensor) {
       try { this._stepSensor.offChange() } catch (e) {}
       this._stepSensor = null
-    }
-
-    if (cancelAlarm && this._fallbackAlarmId) {
-      try { cancelNativeAlarm(this._fallbackAlarmId) } catch (e) {}
-      this._fallbackAlarmId = null
     }
 
     try { resetDropWristScreenOff() } catch (e) {}

@@ -279,12 +279,12 @@ console.log('\n5b. page/ring.page.js: Zombie Walk timeout failure triggers loop 
   ringPage.state.activeStrategy._remainingSeconds = 0
   ringPage.state.activeStrategy._checkProgress()
   ok(ringPage.state.activeStrategy === null, 'failure exits zombie mode')
-  ok(ringPage.state.zombieFailed === true, 'zombieFailed flag set')
+  ok(ringPage.state.captchaFailed === true, 'captchaFailed flag set')
   ok(
     sensorMock.__mock.vibrations[sensorMock.__mock.vibrations.length - 1].action === 'start',
     'alarm resumes ringing with loud vibration'
   )
-  ok(byText('Walk not finished!\nWake up!') !== undefined, 'failure message is displayed on re-ring screen')
+  ok(byText('Challenge not finished!\nWake up!') !== undefined, 'generic failure message is displayed on re-ring screen')
 }
 
 console.log('\n5c. page/ring.page.js: CAPTCHA None directly exits on Dismiss')

@@ -2,6 +2,7 @@ import { createWidget, widget, align, text_style, deleteWidget } from '@zos/ui'
 import { exit } from '@zos/router'
 import { px } from '@zos/utils'
 import { Vibrator, VIBRATOR_SCENE_CALL } from '@zos/sensor'
+import { set as setNativeAlarm, cancel as cancelNativeAlarm } from '@zos/alarm'
 import { getAlarmById } from '../utils/alarm-store'
 import { scheduleNextCheck, rearmAfterRing, snooze } from '../utils/alarm-scheduler'
 import { checkForWakeSignal } from '../utils/smart-wake'
@@ -54,8 +55,9 @@ Page({
         }
         exit()
       }
-    } else if (wake.mode === 'zombie-fail') {
-      this.state.zombieFailed = true
+    } else if (wake.mode === 'captcha-fail') {
+      // Woken up by OS fallback timer because user did not complete the CAPTCHA in time
+      this.state.captchaFailed = true
       this.state.ringing = true
     } else {
       this.state.ringing = true
@@ -68,7 +70,7 @@ Page({
     this.clearWidgets()
 
     const early = this.state.wake && this.state.wake.mode === 'smart-check'
-    const failedZombie = this.state.zombieFailed
+    const failedCaptcha = this.state.captchaFailed
 
     this.track(
       createWidget(widget.FILL_RECT, {
@@ -99,8 +101,8 @@ Page({
     let wakeMessage = 'Wake up!'
     if (early) {
       wakeMessage = 'Light sleep detected\nRise and shine'
-    } else if (failedZombie) {
-      wakeMessage = 'Walk not finished!\nWake up!'
+    } else if (failedCaptcha) {
+      wakeMessage = 'Challenge not finished!\nWake up!'
     }
 
     this.track(
@@ -111,7 +113,7 @@ Page({
         h: px(65),
         text: wakeMessage,
         text_size: px(28),
-        color: failedZombie ? COLOR.danger : COLOR.primary,
+        color: failedCaptcha ? COLOR.danger : COLOR.primary,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
         text_style: text_style.WRAP,
@@ -168,6 +170,7 @@ Page({
   },
 
   onSnooze() {
+    this.cancelFallbackTimer()
     if (this.state.activeStrategy) {
       this.state.activeStrategy.cleanup(true)
       this.state.activeStrategy = null
@@ -182,28 +185,61 @@ Page({
       (this.state.alarm && this.state.alarm.captcha && this.state.alarm.captcha.type) || 'none'
     const strategy = getCaptcha(type)
 
-    if (strategy && strategy.id !== 'none') {
-      this.stopVibration()
-      this.clearWidgets()
-      this.state.activeStrategy = strategy
-      strategy.start({
-        trackWidget: (w) => this.track(w),
-        clearWidgets: () => this.clearWidgets(),
-        alarm: this.state.alarm,
-        config: this.state.alarm.captcha,
-        onSuccess: () => this.onCaptchaSuccess(),
-        onFail: () => this.onCaptchaFail(),
-        onSnooze: () => this.onSnooze(),
-      })
-    } else {
+    // CAPTCHA = None -> alarm dismissed immediately without delay
+    if (!strategy || strategy.id === 'none') {
+      this.cancelFallbackTimer()
       this.stopVibration()
       rearmAfterRing(this.state.alarm)
       exit()
+      return
+    }
+
+    // CAPTCHA active -> Controller silences alarm, arms generic fallback timer, starts challenge
+    this.stopVibration()
+    this.clearWidgets()
+    this.armFallbackTimer(this.state.alarm.captcha?.timeoutSec || 180)
+
+    this.state.activeStrategy = strategy
+    strategy.start({
+      trackWidget: (w) => this.track(w),
+      clearWidgets: () => this.clearWidgets(),
+      alarm: this.state.alarm,
+      config: this.state.alarm.captcha,
+      onSuccess: () => this.onCaptchaSuccess(),
+      onFail: () => this.onCaptchaFail(),
+      onSnooze: () => this.onSnooze(),
+    })
+  },
+
+  armFallbackTimer(timeoutSec) {
+    const nowSec = Math.floor(Date.now() / 1000)
+    try {
+      this.state.fallbackAlarmId = setNativeAlarm({
+        url: 'page/ring.page',
+        time: nowSec + timeoutSec,
+        store: true,
+        param: JSON.stringify({ id: this.state.alarm.id, mode: 'captcha-fail' }),
+      })
+    } catch (e) { }
+  },
+
+  cancelFallbackTimer() {
+    if (this.state.fallbackAlarmId) {
+      try { cancelNativeAlarm(this.state.fallbackAlarmId) } catch (e) { }
+      this.state.fallbackAlarmId = null
     }
   },
 
+  /**
+   * CAPTCHA = SUCCESS: Alarm is officially dismissed and re-armed for the next occurrence.
+   */
   onCaptchaSuccess() {
-    this.state.activeStrategy = null
+    this.cancelFallbackTimer()
+    if (this.state.activeStrategy) {
+      this.state.activeStrategy.cleanup(true)
+      this.state.activeStrategy = null
+    }
+    this.stopVibration()
     this.clearWidgets()
 
     this.track(
@@ -251,9 +287,9 @@ Page({
       vibrator.setMode(VIBRATOR_SCENE_CALL)
       vibrator.start()
       setTimeout(() => {
-        try { vibrator.stop() } catch (e) {}
+        try { vibrator.stop() } catch (e) { }
       }, 400)
-    } catch (e) {}
+    } catch (e) { }
 
     rearmAfterRing(this.state.alarm)
 
@@ -262,9 +298,16 @@ Page({
     }, 1500)
   },
 
+  /**
+   * CAPTCHA = FAIL: Time expired or challenge failed. Return to ringing with updated current time!
+   */
   onCaptchaFail() {
-    this.state.activeStrategy = null
-    this.state.zombieFailed = true
+    this.cancelFallbackTimer()
+    if (this.state.activeStrategy) {
+      this.state.activeStrategy.cleanup(true)
+      this.state.activeStrategy = null
+    }
+    this.state.captchaFailed = true
     this.build()
   },
 
@@ -281,8 +324,8 @@ Page({
   onDestroy() {
     this.stopVibration()
     if (this.state.activeStrategy) {
-      // Clean up runtime timers/listeners, but preserve fallback OS alarm
-      // if user exited before solving the challenge.
+      // Clean up challenge runtime UI and sensors, but keep fallback OS alarm
+      // active so the alarm rings if the user closed the app without solving!
       this.state.activeStrategy.cleanup(false)
       this.state.activeStrategy = null
     }
