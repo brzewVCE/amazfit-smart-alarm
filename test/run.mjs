@@ -242,15 +242,15 @@ console.log('\n5. page/ring.page.js: alarm fires at exact time and enters Zombie
   // Dismissing with Zombie Walk active transitions into the walk challenge
   byText('Dismiss')._opts.click_func()
   ok(sensorMock.__mock.vibrations.some((v) => v.action === 'stop'), 'Dismiss stops the vibration motor')
-  ok(ringPage.state.zombieMode === true, 'Dismiss enters Zombie Walk challenge mode')
+  ok(ringPage.state.activeStrategy !== null && ringPage.state.activeStrategy.id === 'zombie', 'Dismiss enters Zombie Walk challenge mode')
   ok(alarmMock.__mock.active.size === 3, 'Zombie Walk arms a fallback timer for timeout failure')
   ok(byText('ZOMBIE WALK') !== undefined, 'Zombie Walk title is displayed')
   ok(byText('0 / 30') !== undefined, 'initial 0 / 30 steps is displayed')
 
-  // Simulate walking 30 steps
+  // Simulate walking 30 steps via the Step sensor's registered onChange callback
   sensorMock.__mock.steps.current = 130 // started at 100, +30 steps
-  ringPage.onStepUpdate()
-  ok(ringPage.state.currentSteps === 30, 'step sensor update reflects 30 steps')
+  sensorMock.__mock.steps.callbacks.forEach((cb) => cb())
+  ok(ringPage.state.activeStrategy === null, 'completing steps clears active strategy')
   ok(alarmMock.__mock.active.size === 2, 'completing steps cancels the fallback alarm')
   ok(byText('✓ AWAKE!') !== undefined, 'success screen shows AWAKE!')
 
@@ -273,12 +273,12 @@ console.log('\n5b. page/ring.page.js: Zombie Walk timeout failure triggers loop 
   ringPage.onInit()
   ringPage.build()
   byText('Dismiss')._opts.click_func()
-  ok(ringPage.state.zombieMode === true, 'Dismiss enters zombie mode')
+  ok(ringPage.state.activeStrategy !== null && ringPage.state.activeStrategy.id === 'zombie', 'Dismiss enters zombie mode')
 
   // Simulate time expiring
-  ringPage.state.remainingSeconds = 0
-  ringPage.checkZombieProgress()
-  ok(ringPage.state.zombieMode === false, 'failure exits zombie mode')
+  ringPage.state.activeStrategy._remainingSeconds = 0
+  ringPage.state.activeStrategy._checkProgress()
+  ok(ringPage.state.activeStrategy === null, 'failure exits zombie mode')
   ok(ringPage.state.zombieFailed === true, 'zombieFailed flag set')
   ok(
     sensorMock.__mock.vibrations[sensorMock.__mock.vibrations.length - 1].action === 'start',
@@ -373,4 +373,27 @@ console.log('\n8. delete flow')
   ok(routerMock.__mock.calls.some((c) => c.fn === 'back'), 'Delete navigates back')
 }
 
+console.log('\n9. utils/captcha: Strategy interface & dynamic extensibility')
+{
+  const { getCaptcha, getAvailableCaptchas, registerCaptcha } = await import('../utils/captcha/registry.js')
+  const available = getAvailableCaptchas()
+  ok(available.some((c) => c.id === 'none'), "registry includes 'none' strategy")
+  ok(available.some((c) => c.id === 'zombie'), "registry includes 'zombie' strategy")
+
+  // Test pluggability: register a custom strategy without touching page code
+  const customStrategy = {
+    id: 'math',
+    label: 'Math Puzzle',
+    getDefaultConfig: () => ({ problem: '2+2' }),
+    getSummary: () => 'Math',
+    renderSettings: () => {},
+    start: (ctx) => ctx.onSuccess(),
+    cleanup: () => {},
+  }
+  registerCaptcha(customStrategy)
+  ok(getCaptcha('math').label === 'Math Puzzle', 'new custom CAPTCHA strategy is retrievable dynamically')
+  ok(getAvailableCaptchas().some((c) => c.id === 'math'), 'custom strategy is included in available captchas')
+}
+
 console.log(`\nALL ${passCount} CHECKS PASSED`)
+
