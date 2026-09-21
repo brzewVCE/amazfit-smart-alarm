@@ -196,19 +196,21 @@ Page({
       { message: '✓ AWAKE!\nChallenge complete' }
     )
 
-    // Brief confirmation vibration
+    // Brief confirmation vibration safely tracked on state.vibrator
     try {
       const vibrator = new Vibrator()
       vibrator.setMode(VIBRATOR_SCENE_CALL)
       vibrator.start()
-      setTimeout(() => {
-        try { vibrator.stop() } catch (e) {}
-      }, 400)
+      this.state.vibrator = vibrator
+      this._hapticTimer = setTimeout(() => {
+        this.stopVibration()
+      }, 300)
     } catch (e) {}
 
     rearmAfterRing(this.state.alarm)
 
-    setTimeout(() => {
+    this._exitTimer = setTimeout(() => {
+      this.stopVibration()
       exit()
     }, 1500)
   },
@@ -235,6 +237,14 @@ Page({
   },
 
   onDestroy() {
+    if (this._hapticTimer) {
+      clearTimeout(this._hapticTimer)
+      this._hapticTimer = null
+    }
+    if (this._exitTimer) {
+      clearTimeout(this._exitTimer)
+      this._exitTimer = null
+    }
     this.stopVibration()
     if (this.state.activeStrategy) {
       // Clean up challenge runtime UI and sensors, but keep fallback OS alarm

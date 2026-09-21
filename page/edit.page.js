@@ -91,9 +91,9 @@ Page({
     // Title
     this.track(
       createWidget(widget.TEXT, {
-        x: px(16),
-        y: px(14),
-        w: px(400),
+        x: px(24),
+        y: px(48),
+        w: px(384),
         h: px(36),
         text: 'Set Time',
         text_size: px(26),
@@ -107,7 +107,7 @@ Page({
     this.track(
       createWidget(widget.BUTTON, {
         x: px(46),
-        y: px(56),
+        y: px(96),
         w: px(140),
         h: px(56),
         radius: px(16),
@@ -123,7 +123,7 @@ Page({
     this.track(
       createWidget(widget.BUTTON, {
         x: px(246),
-        y: px(56),
+        y: px(96),
         w: px(140),
         h: px(56),
         radius: px(16),
@@ -139,7 +139,7 @@ Page({
     this.state.hourWidget = this.track(
       createWidget(widget.BUTTON, {
         x: px(46),
-        y: px(120),
+        y: px(160),
         w: px(140),
         h: px(80),
         radius: px(16),
@@ -155,7 +155,7 @@ Page({
     this.track(
       createWidget(widget.TEXT, {
         x: px(196),
-        y: px(120),
+        y: px(160),
         w: px(40),
         h: px(80),
         text: ':',
@@ -170,7 +170,7 @@ Page({
     this.state.minWidget = this.track(
       createWidget(widget.BUTTON, {
         x: px(246),
-        y: px(120),
+        y: px(160),
         w: px(140),
         h: px(80),
         radius: px(16),
@@ -186,7 +186,7 @@ Page({
     this.track(
       createWidget(widget.BUTTON, {
         x: px(46),
-        y: px(208),
+        y: px(248),
         w: px(140),
         h: px(56),
         radius: px(16),
@@ -202,7 +202,7 @@ Page({
     this.track(
       createWidget(widget.BUTTON, {
         x: px(246),
-        y: px(208),
+        y: px(248),
         w: px(140),
         h: px(56),
         radius: px(16),
@@ -226,8 +226,8 @@ Page({
     presets.forEach((p, i) => {
       this.track(
         createWidget(widget.BUTTON, {
-          x: px(22 + i * (preW + preGap)),
-          y: px(274),
+          x: px(26 + i * (preW + preGap)),
+          y: px(314),
           w: px(preW),
           h: px(44),
           radius: px(12),
@@ -243,9 +243,9 @@ Page({
     // Cancel Button
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(22),
-        y: px(332),
-        w: px(185),
+        x: px(24),
+        y: px(374),
+        w: px(184),
         h: px(60),
         radius: px(18),
         normal_color: COLOR.surface,
@@ -262,9 +262,9 @@ Page({
     // Confirm Button
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(225),
-        y: px(332),
-        w: px(185),
+        x: px(224),
+        y: px(374),
+        w: px(184),
         h: px(60),
         radius: px(18),
         normal_color: COLOR.primary,
@@ -370,8 +370,8 @@ Page({
     // Header Back button
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
-        y: px(10),
+        x: px(18),
+        y: px(38),
         w: px(90),
         h: px(44),
         radius: px(14),
@@ -390,8 +390,8 @@ Page({
     this.track(
       createWidget(widget.TEXT, {
         x: px(116),
-        y: px(10),
-        w: px(300),
+        y: px(38),
+        w: px(298),
         h: px(44),
         text: 'CAPTCHA Menu',
         text_size: px(26),
@@ -402,15 +402,15 @@ Page({
     )
 
     // Method selection buttons for all registered CAPTCHA strategies
-    const btnW = 194
+    const btnW = 192
     available.forEach((strat, i) => {
       const isSelected = currentStrategy.id === strat.id
       this.track(
         createWidget(widget.BUTTON, {
-          x: px(16 + i * (btnW + 12)),
-          y: px(68),
+          x: px(18 + i * (btnW + 12)),
+          y: px(92),
           w: px(btnW),
-          h: px(52),
+          h: px(50),
           radius: px(16),
           normal_color: isSelected ? COLOR.primary : COLOR.surface,
           press_color: COLOR.primaryDim,
@@ -432,9 +432,9 @@ Page({
     // Done button at bottom
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
-        y: px(420),
-        w: px(400),
+        x: px(24),
+        y: px(406),
+        w: px(384),
         h: px(56),
         radius: px(18),
         normal_color: COLOR.primary,

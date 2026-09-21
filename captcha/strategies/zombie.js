@@ -149,7 +149,7 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
 
   /**
    * Renders the configuration controls for Zombie Walk in the edit page.
-   * Uses safe widths (350px) to prevent edge clipping on 390px square screens.
+   * Uses horizontally centered controls with safe margins for square screens.
    */
   renderSettings(page, config, onUpdate) {
     if (!config.steps) config.steps = DEFAULT_ZOMBIE_STEPS
@@ -158,9 +158,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Steps section label
     page.track(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(132),
-        w: px(350),
+        x: px(24),
+        y: px(152),
+        w: px(384),
         h: px(28),
         text: 'Steps to dismiss:',
         text_size: px(22),
@@ -173,9 +173,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [-5] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(20),
-        y: px(164),
-        w: px(96),
+        x: px(24),
+        y: px(182),
+        w: px(100),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
@@ -195,9 +195,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Steps display
     page.track(
       createWidget(widget.TEXT, {
-        x: px(126),
-        y: px(164),
-        w: px(138),
+        x: px(136),
+        y: px(182),
+        w: px(160),
         h: px(52),
         text: `${config.steps} steps`,
         text_size: px(24),
@@ -210,9 +210,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [+5] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(274),
-        y: px(164),
-        w: px(96),
+        x: px(308),
+        y: px(182),
+        w: px(100),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
@@ -232,9 +232,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Timeout section label
     page.track(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(228),
-        w: px(350),
+        x: px(24),
+        y: px(244),
+        w: px(384),
         h: px(28),
         text: 'Timeout (resumes alarm):',
         text_size: px(22),
@@ -247,9 +247,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [-30s] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(20),
-        y: px(260),
-        w: px(96),
+        x: px(24),
+        y: px(274),
+        w: px(100),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
@@ -269,9 +269,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Timeout display
     page.track(
       createWidget(widget.TEXT, {
-        x: px(126),
-        y: px(260),
-        w: px(138),
+        x: px(136),
+        y: px(274),
+        w: px(160),
         h: px(52),
         text: `${formatDuration(config.timeoutSec)} min`,
         text_size: px(24),
@@ -284,9 +284,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [+30s] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(274),
-        y: px(260),
-        w: px(96),
+        x: px(308),
+        y: px(274),
+        w: px(100),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
@@ -306,9 +306,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Explanatory text
     page.track(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(322),
-        w: px(350),
+        x: px(24),
+        y: px(336),
+        w: px(384),
         h: px(50),
         text: `Walk ${config.steps} steps within ${formatDuration(config.timeoutSec)}.\nIf time expires, alarm resumes ringing.`,
         text_size: px(18),
@@ -402,7 +402,7 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     if (!this._ctx) return
     this._ctx.clearWidgets()
 
-    const BAR_WIDTH = 330
+    const BAR_WIDTH = 340
 
     // Background
     this._ctx.trackWidget(
@@ -415,12 +415,12 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
       })
     )
 
-    // Header title
+    // Header title (shifted down to y: 52 for bezel clearance)
     this._ctx.trackWidget(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(16),
-        w: px(350),
+        x: px(24),
+        y: px(52),
+        w: px(384),
         h: px(36),
         text: 'ZOMBIE WALK',
         text_size: px(28),
@@ -433,9 +433,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Subtitle
     this._ctx.trackWidget(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(54),
-        w: px(350),
+        x: px(24),
+        y: px(92),
+        w: px(384),
         h: px(26),
         text: 'Walk to turn off alarm',
         text_size: px(20),
@@ -448,9 +448,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Big Step Counter
     this._counterWidget = this._ctx.trackWidget(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(92),
-        w: px(350),
+        x: px(24),
+        y: px(126),
+        w: px(384),
         h: px(78),
         text: `${this._currentSteps} / ${this._targetSteps}`,
         text_size: px(58),
@@ -463,9 +463,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Label under counter
     this._ctx.trackWidget(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(172),
-        w: px(350),
+        x: px(24),
+        y: px(208),
+        w: px(384),
         h: px(24),
         text: 'steps walked',
         text_size: px(18),
@@ -475,28 +475,28 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
       })
     )
 
-    // Progress bar track
+    // Progress bar track (centered at x: 46 in 432 width: (432-340)/2 = 46)
     this._ctx.trackWidget(
       createWidget(widget.FILL_RECT, {
-        x: px(30),
-        y: px(208),
+        x: px(46),
+        y: px(244),
         w: px(BAR_WIDTH),
-        h: px(14),
-        radius: px(7),
+        h: px(16),
+        radius: px(8),
         color: COLOR.surfaceAlt,
       })
     )
 
     // Progress bar fill
     const progress = Math.min(1, this._currentSteps / this._targetSteps)
-    const fillW = Math.max(14, Math.floor(BAR_WIDTH * progress))
+    const fillW = Math.max(16, Math.floor(BAR_WIDTH * progress))
     this._fillWidget = this._ctx.trackWidget(
       createWidget(widget.FILL_RECT, {
-        x: px(30),
-        y: px(208),
+        x: px(46),
+        y: px(244),
         w: px(fillW),
-        h: px(14),
-        radius: px(7),
+        h: px(16),
+        radius: px(8),
         color: COLOR.primary,
       })
     )
@@ -504,9 +504,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Countdown timer
     this._timerWidget = this._ctx.trackWidget(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(236),
-        w: px(350),
+        x: px(24),
+        y: px(274),
+        w: px(384),
         h: px(32),
         text: `Alarm resumes in ${formatDuration(this._remainingSeconds)}`,
         text_size: px(21),
@@ -522,9 +522,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
       : 'Sensor active'
     this._statusWidget = this._ctx.trackWidget(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(272),
-        w: px(350),
+        x: px(24),
+        y: px(312),
+        w: px(384),
         h: px(24),
         text: initialStatus,
         text_size: px(17),
@@ -534,12 +534,12 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
       })
     )
 
-    // Snooze button
+    // Snooze button (centered at x: 106 in 432 width: (432-220)/2 = 106)
     this._ctx.trackWidget(
       createWidget(widget.BUTTON, {
-        x: px(95),
-        y: px(312),
-        w: px(200),
+        x: px(106),
+        y: px(352),
+        w: px(220),
         h: px(64),
         radius: px(18),
         normal_color: COLOR.surface,
@@ -561,9 +561,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
 
     updateWidgetText(this._counterWidget, `${this._currentSteps} / ${this._targetSteps}`)
 
-    const BAR_WIDTH = 330
+    const BAR_WIDTH = 340
     const progress = Math.min(1, this._currentSteps / this._targetSteps)
-    const fillW = Math.max(14, Math.floor(BAR_WIDTH * progress))
+    const fillW = Math.max(16, Math.floor(BAR_WIDTH * progress))
     updateWidgetWidth(this._fillWidget, fillW)
 
     updateWidgetText(
