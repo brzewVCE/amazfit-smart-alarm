@@ -1,4 +1,4 @@
-import { createWidget, widget, align, text_style } from '@zos/ui'
+import { createWidget, widget, align, text_style, prop } from '@zos/ui'
 import { px } from '@zos/utils'
 import { Step } from '@zos/sensor'
 import {
@@ -22,6 +22,90 @@ export const ZOMBIE_TIMEOUT_MIN_SEC = 60
 export const ZOMBIE_TIMEOUT_MAX_SEC = 600
 
 /**
+ * Safely extracts numeric step count from any Zepp OS step sensor object.
+ * Handles Zepp OS 3.x (getCurrent), Zepp OS 2.x/1.x properties (current, step), and legacy objects.
+ */
+function extractStepCount(sensor) {
+  if (!sensor) return null
+
+  // 1. getCurrent() method (standard in @zos/sensor)
+  try {
+    if (typeof sensor.getCurrent === 'function') {
+      const val = sensor.getCurrent()
+      if (typeof val === 'number' && !isNaN(val) && val >= 0) {
+        return val
+      }
+    }
+  } catch (e) {}
+
+  // 2. .current property (standard in Zepp OS 1.0/2.0 native hmSensor)
+  try {
+    if (typeof sensor.current === 'number' && !isNaN(sensor.current) && sensor.current >= 0) {
+      return sensor.current
+    }
+  } catch (e) {}
+
+  // 3. getStep() method (alternate SDK naming)
+  try {
+    if (typeof sensor.getStep === 'function') {
+      const val = sensor.getStep()
+      if (typeof val === 'number' && !isNaN(val) && val >= 0) {
+        return val
+      }
+    }
+  } catch (e) {}
+
+  // 4. .step property
+  try {
+    if (typeof sensor.step === 'number' && !isNaN(sensor.step) && sensor.step >= 0) {
+      return sensor.step
+    }
+  } catch (e) {}
+
+  return null
+}
+
+/**
+ * Creates legacy hmSensor fallback if available in runtime.
+ */
+function createLegacyStepSensor() {
+  try {
+    if (
+      typeof hmSensor !== 'undefined' &&
+      hmSensor &&
+      typeof hmSensor.createSensor === 'function' &&
+      hmSensor.id &&
+      hmSensor.id.STEP
+    ) {
+      return hmSensor.createSensor(hmSensor.id.STEP)
+    }
+  } catch (e) {}
+  return null
+}
+
+function updateWidgetText(w, text) {
+  if (!w) return
+  try {
+    w.setProperty(prop.MORE, { text })
+  } catch (e) {
+    try {
+      w.setProperty(prop.TEXT, text)
+    } catch (e2) {}
+  }
+}
+
+function updateWidgetWidth(w, width) {
+  if (!w) return
+  try {
+    w.setProperty(prop.MORE, { w: px(width) })
+  } catch (e) {
+    try {
+      w.setProperty(prop.W, px(width))
+    } catch (e2) {}
+  }
+}
+
+/**
  * Zombie Walk CAPTCHA challenge adapter:
  * Requires the user to walk a specified number of steps within a time window
  * to permanently dismiss the alarm.
@@ -33,11 +117,20 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Runtime state
     this._ctx = null
     this._stepSensor = null
-    this._initialSteps = 0
+    this._legacySensor = null
+    this._onSensorChange = null
+    this._initialSteps = -1
     this._currentSteps = 0
+    this._lastRawSteps = 0
     this._targetSteps = DEFAULT_ZOMBIE_STEPS
     this._remainingSeconds = DEFAULT_ZOMBIE_TIMEOUT_SEC
     this._timerId = null
+
+    // Cached widget references for in-place UI updates
+    this._counterWidget = null
+    this._fillWidget = null
+    this._timerWidget = null
+    this._statusWidget = null
   }
 
   getDefaultConfig() {
@@ -56,6 +149,7 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
 
   /**
    * Renders the configuration controls for Zombie Walk in the edit page.
+   * Uses safe widths (350px) to prevent edge clipping on 390px square screens.
    */
   renderSettings(page, config, onUpdate) {
     if (!config.steps) config.steps = DEFAULT_ZOMBIE_STEPS
@@ -64,9 +158,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Steps section label
     page.track(
       createWidget(widget.TEXT, {
-        x: px(16),
+        x: px(20),
         y: px(132),
-        w: px(400),
+        w: px(350),
         h: px(28),
         text: 'Steps to dismiss:',
         text_size: px(22),
@@ -79,15 +173,15 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [-5] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
+        x: px(20),
         y: px(164),
-        w: px(110),
+        w: px(96),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `-${ZOMBIE_STEPS_STEP}`,
-        text_size: px(26),
+        text_size: px(24),
         click_func: () => {
           config.steps = Math.max(
             ZOMBIE_STEPS_MIN,
@@ -101,12 +195,12 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Steps display
     page.track(
       createWidget(widget.TEXT, {
-        x: px(136),
+        x: px(126),
         y: px(164),
-        w: px(160),
+        w: px(138),
         h: px(52),
         text: `${config.steps} steps`,
-        text_size: px(26),
+        text_size: px(24),
         color: COLOR.primary,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -116,15 +210,15 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [+5] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(306),
+        x: px(274),
         y: px(164),
-        w: px(110),
+        w: px(96),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `+${ZOMBIE_STEPS_STEP}`,
-        text_size: px(26),
+        text_size: px(24),
         click_func: () => {
           config.steps = Math.max(
             ZOMBIE_STEPS_MIN,
@@ -138,9 +232,9 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Timeout section label
     page.track(
       createWidget(widget.TEXT, {
-        x: px(16),
+        x: px(20),
         y: px(228),
-        w: px(400),
+        w: px(350),
         h: px(28),
         text: 'Timeout (resumes alarm):',
         text_size: px(22),
@@ -153,15 +247,15 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [-30s] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
+        x: px(20),
         y: px(260),
-        w: px(110),
+        w: px(96),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `-${ZOMBIE_TIMEOUT_STEP_SEC}s`,
-        text_size: px(24),
+        text_size: px(22),
         click_func: () => {
           config.timeoutSec = Math.max(
             ZOMBIE_TIMEOUT_MIN_SEC,
@@ -175,12 +269,12 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Timeout display
     page.track(
       createWidget(widget.TEXT, {
-        x: px(136),
+        x: px(126),
         y: px(260),
-        w: px(160),
+        w: px(138),
         h: px(52),
         text: `${formatDuration(config.timeoutSec)} min`,
-        text_size: px(26),
+        text_size: px(24),
         color: COLOR.text,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -190,15 +284,15 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // [+30s] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(306),
+        x: px(274),
         y: px(260),
-        w: px(110),
+        w: px(96),
         h: px(52),
         radius: px(16),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `+${ZOMBIE_TIMEOUT_STEP_SEC}s`,
-        text_size: px(24),
+        text_size: px(22),
         click_func: () => {
           config.timeoutSec = Math.max(
             ZOMBIE_TIMEOUT_MIN_SEC,
@@ -212,12 +306,12 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Explanatory text
     page.track(
       createWidget(widget.TEXT, {
-        x: px(16),
+        x: px(20),
         y: px(322),
-        w: px(400),
+        w: px(350),
         h: px(50),
-        text: `Walk ${config.steps} steps within ${formatDuration(config.timeoutSec)}.\nIf time expires, alarm rings again.`,
-        text_size: px(19),
+        text: `Walk ${config.steps} steps within ${formatDuration(config.timeoutSec)}.\nIf time expires, alarm resumes ringing.`,
+        text_size: px(18),
         color: COLOR.textDim,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -235,35 +329,80 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     this._targetSteps = config.steps || DEFAULT_ZOMBIE_STEPS
     this._remainingSeconds = config.timeoutSec || DEFAULT_ZOMBIE_TIMEOUT_SEC
     this._currentSteps = 0
+    this._initialSteps = -1
+    this._lastRawSteps = 0
 
-    // 1. Initialize Step sensor
+    // 1. Initialize Step sensors (both modern @zos/sensor and legacy hmSensor fallback)
     try {
       this._stepSensor = new Step()
-      this._initialSteps = this._stepSensor.getCurrent() || 0
-      this._stepSensor.onChange(() => this._onStepUpdate())
     } catch (e) {
-      this._initialSteps = 0
+      this._stepSensor = null
     }
 
-    // 2. Keep screen bright during challenge
+    try {
+      this._legacySensor = createLegacyStepSensor()
+    } catch (e) {
+      this._legacySensor = null
+    }
+
+    // 2. Read initial baseline steps if available
+    const initialRaw = this._readRawSteps()
+    if (initialRaw !== null) {
+      this._initialSteps = initialRaw
+      this._lastRawSteps = initialRaw
+    }
+
+    // 3. Register change listeners
+    this._onSensorChange = () => this._onStepUpdate()
+
+    if (this._stepSensor && typeof this._stepSensor.onChange === 'function') {
+      try {
+        this._stepSensor.onChange(this._onSensorChange)
+      } catch (e) {}
+    }
+
+    if (
+      this._legacySensor &&
+      typeof this._legacySensor.addEventListener === 'function' &&
+      typeof hmSensor !== 'undefined' &&
+      hmSensor.event
+    ) {
+      try {
+        this._legacySensor.addEventListener(hmSensor.event.CHANGE, this._onSensorChange)
+      } catch (e) {}
+    }
+
+    // 4. Keep screen bright during challenge
     try {
       const brightMs = Math.min(this._remainingSeconds * 1000 + 10000, 300000)
       setPageBrightTime({ brightTime: brightMs })
       pauseDropWristScreenOff({ duration: brightMs })
     } catch (e) {}
 
-    // 3. Render initial UI
-    this._renderChallengeUI()
+    // 5. Render initial challenge UI widgets
+    this._buildChallengeUI()
 
-    // 4. Start periodic tick interval
+    // 6. Start periodic 1-second tick interval (both for countdown and sensor polling)
     this._timerId = setInterval(() => {
       this._onTick()
     }, 1000)
   }
 
-  _renderChallengeUI() {
+  _readRawSteps() {
+    const s1 = extractStepCount(this._stepSensor)
+    if (s1 !== null) return s1
+
+    const s2 = extractStepCount(this._legacySensor)
+    if (s2 !== null) return s2
+
+    return null
+  }
+
+  _buildChallengeUI() {
     if (!this._ctx) return
     this._ctx.clearWidgets()
+
+    const BAR_WIDTH = 330
 
     // Background
     this._ctx.trackWidget(
@@ -280,11 +419,11 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     this._ctx.trackWidget(
       createWidget(widget.TEXT, {
         x: px(20),
-        y: px(24),
-        w: px(392),
-        h: px(40),
+        y: px(16),
+        w: px(350),
+        h: px(36),
         text: 'ZOMBIE WALK',
-        text_size: px(30),
+        text_size: px(28),
         color: COLOR.primary,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -295,39 +434,10 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     this._ctx.trackWidget(
       createWidget(widget.TEXT, {
         x: px(20),
-        y: px(68),
-        w: px(392),
-        h: px(30),
+        y: px(54),
+        w: px(350),
+        h: px(26),
         text: 'Walk to turn off alarm',
-        text_size: px(22),
-        color: COLOR.textDim,
-        align_h: align.CENTER_H,
-        align_v: align.CENTER_V,
-      })
-    )
-
-    // Big Step Counter
-    this._ctx.trackWidget(
-      createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(118),
-        w: px(392),
-        h: px(84),
-        text: `${this._currentSteps} / ${this._targetSteps}`,
-        text_size: px(64),
-        color: COLOR.text,
-        align_h: align.CENTER_H,
-        align_v: align.CENTER_V,
-      })
-    )
-
-    this._ctx.trackWidget(
-      createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(204),
-        w: px(392),
-        h: px(28),
-        text: 'steps walked',
         text_size: px(20),
         color: COLOR.textDim,
         align_h: align.CENTER_H,
@@ -335,44 +445,89 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
       })
     )
 
-    // Progress bar
-    const barW = 352
-    const progress = Math.min(1, this._currentSteps / this._targetSteps)
-    const fillW = Math.max(16, Math.floor(barW * progress))
+    // Big Step Counter
+    this._counterWidget = this._ctx.trackWidget(
+      createWidget(widget.TEXT, {
+        x: px(20),
+        y: px(92),
+        w: px(350),
+        h: px(78),
+        text: `${this._currentSteps} / ${this._targetSteps}`,
+        text_size: px(58),
+        color: COLOR.text,
+        align_h: align.CENTER_H,
+        align_v: align.CENTER_V,
+      })
+    )
 
+    // Label under counter
+    this._ctx.trackWidget(
+      createWidget(widget.TEXT, {
+        x: px(20),
+        y: px(172),
+        w: px(350),
+        h: px(24),
+        text: 'steps walked',
+        text_size: px(18),
+        color: COLOR.textDim,
+        align_h: align.CENTER_H,
+        align_v: align.CENTER_V,
+      })
+    )
+
+    // Progress bar track
     this._ctx.trackWidget(
       createWidget(widget.FILL_RECT, {
-        x: px(40),
-        y: px(244),
-        w: px(barW),
-        h: px(16),
-        radius: px(8),
+        x: px(30),
+        y: px(208),
+        w: px(BAR_WIDTH),
+        h: px(14),
+        radius: px(7),
         color: COLOR.surfaceAlt,
       })
     )
 
-    if (progress > 0) {
-      this._ctx.trackWidget(
-        createWidget(widget.FILL_RECT, {
-          x: px(40),
-          y: px(244),
-          w: px(fillW),
-          h: px(16),
-          radius: px(8),
-          color: COLOR.primary,
-        })
-      )
-    }
+    // Progress bar fill
+    const progress = Math.min(1, this._currentSteps / this._targetSteps)
+    const fillW = Math.max(14, Math.floor(BAR_WIDTH * progress))
+    this._fillWidget = this._ctx.trackWidget(
+      createWidget(widget.FILL_RECT, {
+        x: px(30),
+        y: px(208),
+        w: px(fillW),
+        h: px(14),
+        radius: px(7),
+        color: COLOR.primary,
+      })
+    )
 
     // Countdown timer
-    this._ctx.trackWidget(
+    this._timerWidget = this._ctx.trackWidget(
       createWidget(widget.TEXT, {
         x: px(20),
-        y: px(282),
-        w: px(392),
-        h: px(36),
+        y: px(236),
+        w: px(350),
+        h: px(32),
         text: `Alarm resumes in ${formatDuration(this._remainingSeconds)}`,
-        text_size: px(24),
+        text_size: px(21),
+        color: COLOR.textDim,
+        align_h: align.CENTER_H,
+        align_v: align.CENTER_V,
+      })
+    )
+
+    // Daily Total / Sensor Live Indicator
+    const initialStatus = this._lastRawSteps > 0
+      ? `Today: ${this._lastRawSteps} steps`
+      : 'Sensor active'
+    this._statusWidget = this._ctx.trackWidget(
+      createWidget(widget.TEXT, {
+        x: px(20),
+        y: px(272),
+        w: px(350),
+        h: px(24),
+        text: initialStatus,
+        text_size: px(17),
         color: COLOR.textDim,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -382,15 +537,15 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     // Snooze button
     this._ctx.trackWidget(
       createWidget(widget.BUTTON, {
-        x: px(116),
-        y: px(370),
+        x: px(95),
+        y: px(312),
         w: px(200),
-        h: px(70),
-        radius: px(20),
+        h: px(64),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.border,
         text: `Snooze ${SNOOZE_MINUTES}m`,
-        text_size: px(24),
+        text_size: px(22),
         click_func: () => {
           this.cleanup(true)
           if (this._ctx && this._ctx.onSnooze) {
@@ -401,21 +556,48 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
     )
   }
 
+  _updateChallengeUI() {
+    if (!this._ctx) return
+
+    updateWidgetText(this._counterWidget, `${this._currentSteps} / ${this._targetSteps}`)
+
+    const BAR_WIDTH = 330
+    const progress = Math.min(1, this._currentSteps / this._targetSteps)
+    const fillW = Math.max(14, Math.floor(BAR_WIDTH * progress))
+    updateWidgetWidth(this._fillWidget, fillW)
+
+    updateWidgetText(
+      this._timerWidget,
+      `Alarm resumes in ${formatDuration(this._remainingSeconds)}`
+    )
+
+    const statusText = this._lastRawSteps > 0
+      ? `Today: ${this._lastRawSteps} steps`
+      : 'Sensor active'
+    updateWidgetText(this._statusWidget, statusText)
+  }
+
   _onStepUpdate() {
-    if (this._stepSensor) {
-      const total = this._stepSensor.getCurrent() || 0
-      this._currentSteps = Math.max(0, total - this._initialSteps)
+    const raw = this._readRawSteps()
+    if (raw !== null) {
+      this._lastRawSteps = raw
+      if (this._initialSteps < 0) {
+        this._initialSteps = raw
+        this._currentSteps = 0
+      } else if (raw >= this._initialSteps) {
+        this._currentSteps = raw - this._initialSteps
+      } else {
+        // Counter reset (e.g. midnight rollover)
+        this._initialSteps = raw
+        this._currentSteps = 0
+      }
     }
     this._checkProgress()
   }
 
   _onTick() {
     this._remainingSeconds = Math.max(0, this._remainingSeconds - 1)
-    if (this._stepSensor) {
-      const total = this._stepSensor.getCurrent() || 0
-      this._currentSteps = Math.max(0, total - this._initialSteps)
-    }
-    this._checkProgress()
+    this._onStepUpdate()
   }
 
   _checkProgress() {
@@ -432,20 +614,43 @@ export class ZombieWalkStrategy extends CaptchaStrategy {
         ctx.onFail()
       }
     } else {
-      this._renderChallengeUI()
+      this._updateChallengeUI()
     }
   }
 
-  cleanup() {
+  cleanup(isCancelled = false) {
     if (this._timerId) {
       clearInterval(this._timerId)
       this._timerId = null
     }
 
-    if (this._stepSensor) {
-      try { this._stepSensor.offChange() } catch (e) {}
+    if (this._stepSensor && this._onSensorChange) {
+      try {
+        if (typeof this._stepSensor.offChange === 'function') {
+          this._stepSensor.offChange(this._onSensorChange)
+        }
+      } catch (e) {}
       this._stepSensor = null
     }
+
+    if (this._legacySensor && this._onSensorChange) {
+      try {
+        if (
+          typeof this._legacySensor.removeEventListener === 'function' &&
+          typeof hmSensor !== 'undefined' &&
+          hmSensor.event
+        ) {
+          this._legacySensor.removeEventListener(hmSensor.event.CHANGE, this._onSensorChange)
+        }
+      } catch (e) {}
+      this._legacySensor = null
+    }
+
+    this._onSensorChange = null
+    this._counterWidget = null
+    this._fillWidget = null
+    this._timerWidget = null
+    this._statusWidget = null
 
     try { resetDropWristScreenOff() } catch (e) {}
   }

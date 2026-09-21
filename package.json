@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "zeus dev",
     "preview": "zeus preview",
-    "build": "zeus build",
+    "build": "echo \"\" | zeus build",
     "doctor": "zeus doctor",
     "serve:qr": "python3 scripts/serve_qr.py",
     "preview:web": "python3 -m http.server 8085 --directory scripts",
