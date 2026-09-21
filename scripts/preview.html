@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Alarm - Live Watch Screen Visualizer</title>
+  <style>
+    :root {
+      --bg: #0e0e11;
+      --card-bg: #18181f;
+      --border: #2c2c38;
+      --accent: #3ddc97;
+      --accent-dim: #1f6b4c;
+      --danger: #ef5350;
+      --text: #f0f0f5;
+      --text-muted: #8e8e9f;
+      --surface: #1c1c1e;
+      --surface-alt: #2c2c2e;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 20px;
+      min-height: 100vh;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+    h1 {
+      font-size: 26px;
+      color: var(--accent);
+      margin-bottom: 6px;
+      letter-spacing: -0.5px;
+    }
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .preview-layout {
+      display: flex;
+      gap: 35px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 1100px;
+      width: 100%;
+    }
+    .watch-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .watch-frame {
+      position: relative;
+      width: 390px;
+      height: 450px;
+      border-radius: 44px;
+      overflow: hidden;
+      box-shadow: 0 0 35px rgba(61, 220, 151, 0.15), 0 20px 50px rgba(0, 0, 0, 0.9);
+      border: 6px solid #282832;
+      background: #000;
+      transition: width 0.25s ease, height 0.25s ease, border-radius 0.25s ease;
+    }
+    .watch-screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #000000;
+      overflow: hidden;
+      user-select: none;
+    }
+    .side-panel {
+      background: var(--card-bg);
+      padding: 24px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      max-width: 460px;
+      width: 100%;
+    }
+    .side-panel h3 {
+      font-size: 18px;
+      margin-bottom: 14px;
+      color: #fff;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+      margin: 18px 0 8px 0;
+    }
+    .btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .btn {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn:hover {
+      background: var(--surface-alt);
+      border-color: #4a4a5a;
+    }
+    .btn.active {
+      background: var(--accent);
+      color: #000;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+    .info-box {
+      background: rgba(61, 220, 151, 0.08);
+      border: 1px solid rgba(61, 220, 151, 0.2);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-top: 15px;
+      color: #bbf7d0;
+    }
+    .warning-box {
+      background: rgba(239, 83, 80, 0.1);
+      border: 1px solid rgba(239, 83, 80, 0.3);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-top: 15px;
+      color: #fca5a5;
+    }
+
+    /* Screen UI Styles matching Zepp OS coordinates */
+    .zepp-widget {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .zepp-text {
+      color: #fff;
+      font-weight: 500;
+      text-align: center;
+      line-height: 1.2;
+    }
+    .zepp-btn {
+      border: none;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .overflow-marker {
+      position: absolute;
+      top: 0;
+      left: 390px;
+      width: 42px;
+      height: 100%;
+      background: repeating-linear-gradient(
+        45deg,
+        rgba(239, 83, 80, 0.35),
+        rgba(239, 83, 80, 0.35) 10px,
+        rgba(239, 83, 80, 0.6) 10px,
+        rgba(239, 83, 80, 0.6) 20px
+      );
+      border-left: 2px dashed #ef5350;
+      z-index: 999;
+      display: none;
+    }
+    .overflow-label {
+      position: absolute;
+      top: 20px;
+      right: 4px;
+      background: #ef5350;
+      color: #fff;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 3px 6px;
+      border-radius: 4px;
+      transform: rotate(90deg);
+      transform-origin: top right;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Amazfit Smart Alarm — Visualizer</h1>
+    <p class="subtitle">Wizualizacja ekranów zegarka (Amazfit Active 2 Square 390×450 vs Bip Max 432×514 vs Round 466×466)</p>
+  </header>
+
+  <div class="preview-layout">
+    <!-- Watch Frame -->
+    <div class="watch-wrapper">
+      <div class="watch-frame" id="watchFrame">
+        <div class="overflow-marker" id="overflowMarker">
+          <span class="overflow-label">OBRZĄRD OBŁĘDU (+42px)</span>
+        </div>
+        <div class="watch-screen" id="screenContainer"></div>
+      </div>
+      <div style="margin-top: 12px; font-size: 13px; color: var(--text-muted);" id="resolutionLabel">
+        Amazfit Active 2 (Square) • 390 × 450 px
+      </div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="side-panel">
+      <h3>Sterowanie Symulatorem</h3>
+
+      <div class="section-title">Wybierz Ekran Aplikacji:</div>
+      <div class="btn-group">
+        <button class="btn active" onclick="setScreen('index', this)">1. Lista Alarmów</button>
+        <button class="btn" onclick="setScreen('edit_settings', this)">2. Ustawienia Alarmu</button>
+        <button class="btn" onclick="setScreen('edit_time', this)">3. Wybór Godziny</button>
+        <button class="btn" onclick="setScreen('edit_captcha', this)">4. Menu CAPTCHA</button>
+        <button class="btn" onclick="setScreen('ring', this)">5. Dzwonek Alarmu</button>
+        <button class="btn" onclick="setScreen('zombie', this)">6. Zombie Walk</button>
+      </div>
+
+      <div class="section-title">Model i Rozdzielczość Zegarka:</div>
+      <div class="btn-group">
+        <button class="btn active" onclick="setDevice('active2_square', this)">Active 2 Square (390×450)</button>
+        <button class="btn" onclick="setDevice('bip_max', this)">Bip Max (432×514)</button>
+        <button class="btn" onclick="setDevice('active2_round', this)">Active 2 Round (466×466)</button>
+      </div>
+
+      <div class="section-title">Diagnostyka Obcinania Obrazu:</div>
+      <div class="btn-group">
+        <button class="btn" id="btnOverlay" onclick="toggleClipOverlay()">Pokaż Obszar Obcięcia 432px</button>
+      </div>
+
+      <div class="info-box" id="diagnosticBox">
+        <strong>💡 Dlaczego obraz był obcięty:</strong><br>
+        Plik <code>Smart_Alarm-Active2_Square.zpk</code> był wcześniej rozpakowywany z pierwszego napotkanego pliku square (432×514). Na ekranie 390px zegarek nie mieścił prawej krawędzi (432 - 390 = 42 piksele ucięte).
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentDevice = 'active2_square';
+    let currentScreen = 'index';
+    let showClipOverlay = false;
+
+    // Device resolutions
+    const DEVICES = {
+      active2_square: { w: 390, h: 450, r: '44px', label: 'Amazfit Active 2 (Square) • 390 × 450 px' },
+      bip_max: { w: 432, h: 514, r: '48px', label: 'Amazfit Bip Max (Square) • 432 × 514 px' },
+      active2_round: { w: 466, h: 466, r: '50%', label: 'Amazfit Active 2 (Round) • 466 × 466 px' }
+    };
+
+    function setDevice(deviceKey, btn) {
+      currentDevice = deviceKey;
+      const dev = DEVICES[deviceKey];
+      const frame = document.getElementById('watchFrame');
+      frame.style.width = dev.w + 'px';
+      frame.style.height = dev.h + 'px';
+      frame.style.borderRadius = dev.r;
+      document.getElementById('resolutionLabel').innerText = dev.label;
+
+      if (btn) {
+        btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      render();
+    }
+
+    function setScreen(screenKey, btn) {
+      currentScreen = screenKey;
+      if (btn) {
+        btn.parentElement.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      render();
+    }
+
+    function toggleClipOverlay() {
+      showClipOverlay = !showClipOverlay;
+      const marker = document.getElementById('overflowMarker');
+      const btn = document.getElementById('btnOverlay');
+      if (showClipOverlay) {
+        marker.style.display = 'block';
+        btn.classList.add('active');
+      } else {
+        marker.style.display = 'none';
+        btn.classList.remove('active');
+      }
+    }
+
+    // Render screen contents
+    function render() {
+      const container = document.getElementById('screenContainer');
+      container.innerHTML = '';
+
+      const dev = DEVICES[currentDevice];
+      const scale = dev.w / 432; // Standard Zepp OS px() scale factor
+
+      function px(val) {
+        return Math.round(val * scale);
+      }
+
+      if (currentScreen === 'index') {
+        container.innerHTML = `
+          <!-- Title -->
+          <div class="zepp-widget" style="left:${px(24)}px; top:${px(20)}px; width:${px(384)}px; height:${px(50)}px; justify-content:flex-start;">
+            <span style="font-size:${px(34)}px; font-weight:bold; color:#ffffff;">Smart Alarm</span>
+          </div>
+          <!-- FAB (+) -->
+          <button class="zepp-btn" style="position:absolute; left:${px(296)}px; top:${px(360)}px; width:${px(88)}px; height:${px(88)}px; border-radius:${px(44)}px; background:#3ddc97; color:#000; font-size:${px(48)}px; display:flex; align-items:center; justify-content:center;">+</button>
+          <!-- Row 1 -->
+          <button class="zepp-btn" style="position:absolute; left:${px(16)}px; top:${px(84)}px; width:${px(400)}px; height:${px(68)}px; border-radius:${px(16)}px; background:#2c2c2e; color:#fff; font-size:${px(24)}px; padding:0 ${px(16)}px; text-align:left;">
+            07:30 &nbsp; Mon Wed Fri · Smart
+          </button>
+          <!-- Row 2 -->
+          <button class="zepp-btn" style="position:absolute; left:${px(16)}px; top:${px(162)}px; width:${px(400)}px; height:${px(68)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#8e8e93; font-size:${px(24)}px; padding:0 ${px(16)}px; text-align:left;">
+            08:15 &nbsp; Once (off)
+          </button>
+        `;
+      } else if (currentScreen === 'edit_settings') {
+        container.innerHTML = `
+          <!-- Title -->
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(10)}px; width:${px(400)}px; height:${px(32)}px;">
+            <span style="font-size:${px(24)}px; color:#8e8e93;">Edit Alarm</span>
+          </div>
+          <!-- Time Button -->
+          <button class="zepp-btn" style="position:absolute; left:${px(16)}px; top:${px(46)}px; width:${px(400)}px; height:${px(68)}px; border-radius:${px(18)}px; background:#2c2c2e; color:#3ddc97; font-size:${px(44)}px;">
+            07:30
+          </button>
+          <!-- Days toggle -->
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(122)}px; width:${px(400)}px; height:${px(44)}px; gap:${px(6)}px;">
+            ${['M','T','W','T','F','S','S'].map((d, i) => `
+              <button class="zepp-btn" style="width:${px(50)}px; height:${px(44)}px; border-radius:${px(12)}px; background:${(i===0||i===2||i===4)?'#3ddc97':'#1c1c1e'}; color:${(i===0||i===2||i===4)?'#000':'#fff'}; font-size:${px(20)}px;">${d}</button>
+            `).join('')}
+          </div>
+          <!-- CAPTCHA button -->
+          <button class="zepp-btn" style="position:absolute; left:${px(16)}px; top:${px(250)}px; width:${px(400)}px; height:${px(44)}px; border-radius:${px(14)}px; background:#1c1c1e; color:#fff; font-size:${px(20)}px;">
+            CAPTCHA: Zombie Walk (30 st, 3:00)
+          </button>
+          <!-- Save -->
+          <button class="zepp-btn" style="position:absolute; left:${px(16)}px; top:${px(304)}px; width:${px(400)}px; height:${px(50)}px; border-radius:${px(16)}px; background:#3ddc97; color:#000; font-size:${px(26)}px;">
+            Save
+          </button>
+          <!-- Delete -->
+          <button class="zepp-btn" style="position:absolute; left:${px(16)}px; top:${px(362)}px; width:${px(400)}px; height:${px(46)}px; border-radius:${px(16)}px; background:#ef5350; color:#fff; font-size:${px(22)}px;">
+            Delete Alarm
+          </button>
+        `;
+      } else if (currentScreen === 'edit_time') {
+        container.innerHTML = `
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(14)}px; width:${px(400)}px; height:${px(36)}px;">
+            <span style="font-size:${px(26)}px; color:#8e8e93;">Set Time</span>
+          </div>
+          <!-- Hour + -->
+          <button class="zepp-btn" style="position:absolute; left:${px(46)}px; top:${px(56)}px; width:${px(140)}px; height:${px(56)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(34)}px;">+</button>
+          <!-- Minute + -->
+          <button class="zepp-btn" style="position:absolute; left:${px(246)}px; top:${px(56)}px; width:${px(140)}px; height:${px(56)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(34)}px;">+</button>
+          <!-- Hour Display -->
+          <div class="zepp-widget" style="left:${px(46)}px; top:${px(120)}px; width:${px(140)}px; height:${px(80)}px; border-radius:${px(16)}px; background:#2c2c2e;">
+            <span style="font-size:${px(52)}px; color:#fff;">07</span>
+          </div>
+          <!-- Colon -->
+          <div class="zepp-widget" style="left:${px(196)}px; top:${px(120)}px; width:${px(40)}px; height:${px(80)}px;">
+            <span style="font-size:${px(48)}px; color:#3ddc97;">:</span>
+          </div>
+          <!-- Minute Display -->
+          <div class="zepp-widget" style="left:${px(246)}px; top:${px(120)}px; width:${px(140)}px; height:${px(80)}px; border-radius:${px(16)}px; background:#2c2c2e;">
+            <span style="font-size:${px(52)}px; color:#fff;">30</span>
+          </div>
+          <!-- Hour - -->
+          <button class="zepp-btn" style="position:absolute; left:${px(46)}px; top:${px(208)}px; width:${px(140)}px; height:${px(56)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(34)}px;">-</button>
+          <!-- Minute - -->
+          <button class="zepp-btn" style="position:absolute; left:${px(246)}px; top:${px(208)}px; width:${px(140)}px; height:${px(56)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(34)}px;">-</button>
+          <!-- Presets -->
+          <div class="zepp-widget" style="left:${px(22)}px; top:${px(274)}px; width:${px(388)}px; height:${px(44)}px; gap:${px(10)}px;">
+            <button class="zepp-btn" style="width:${px(88)}px; height:${px(44)}px; border-radius:${px(12)}px; background:#1c1c1e; color:#fff;">:00</button>
+            <button class="zepp-btn" style="width:${px(88)}px; height:${px(44)}px; border-radius:${px(12)}px; background:#1c1c1e; color:#fff;">:15</button>
+            <button class="zepp-btn" style="width:${px(88)}px; height:${px(44)}px; border-radius:${px(12)}px; background:#3ddc97; color:#000;">:30</button>
+            <button class="zepp-btn" style="width:${px(88)}px; height:${px(44)}px; border-radius:${px(12)}px; background:#1c1c1e; color:#fff;">:45</button>
+          </div>
+          <!-- Confirm & Cancel -->
+          <button class="zepp-btn" style="position:absolute; left:${px(40)}px; top:${px(332)}px; width:${px(160)}px; height:${px(54)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(22)}px;">Cancel</button>
+          <button class="zepp-btn" style="position:absolute; left:${px(232)}px; top:${px(332)}px; width:${px(160)}px; height:${px(54)}px; border-radius:${px(16)}px; background:#3ddc97; color:#000; font-size:${px(22)}px;">Confirm</button>
+        `;
+      } else if (currentScreen === 'edit_captcha') {
+        container.innerHTML = `
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(10)}px; width:${px(400)}px; height:${px(32)}px;">
+            <span style="font-size:${px(24)}px; color:#8e8e93;">CAPTCHA Menu</span>
+          </div>
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(48)}px; width:${px(400)}px; height:${px(44)}px; gap:${px(10)}px;">
+            <button class="zepp-btn" style="width:${px(195)}px; height:${px(44)}px; border-radius:${px(14)}px; background:#1c1c1e; color:#8e8e93;">None</button>
+            <button class="zepp-btn" style="width:${px(195)}px; height:${px(44)}px; border-radius:${px(14)}px; background:#3ddc97; color:#000;">Zombie Walk</button>
+          </div>
+          <!-- Steps controls -->
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(110)}px; width:${px(400)}px; height:${px(28)}px; justify-content:flex-start;">
+            <span style="font-size:${px(20)}px; color:#8e8e93;">Steps to dismiss:</span>
+          </div>
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(142)}px; width:${px(400)}px; height:${px(52)}px; justify-content:space-between;">
+            <button class="zepp-btn" style="width:${px(110)}px; height:${px(52)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(24)}px;">-5</button>
+            <span style="font-size:${px(26)}px; color:#3ddc97; font-weight:bold;">30 steps</span>
+            <button class="zepp-btn" style="width:${px(110)}px; height:${px(52)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(24)}px;">+5</button>
+          </div>
+          <!-- Timeout controls -->
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(204)}px; width:${px(400)}px; height:${px(28)}px; justify-content:flex-start;">
+            <span style="font-size:${px(20)}px; color:#8e8e93;">Timeout (resumes alarm):</span>
+          </div>
+          <div class="zepp-widget" style="left:${px(16)}px; top:${px(236)}px; width:${px(400)}px; height:${px(52)}px; justify-content:space-between;">
+            <button class="zepp-btn" style="width:${px(110)}px; height:${px(52)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(22)}px;">-30s</button>
+            <span style="font-size:${px(26)}px; color:#fff;">3:00 min</span>
+            <button class="zepp-btn" style="width:${px(110)}px; height:${px(52)}px; border-radius:${px(16)}px; background:#1c1c1e; color:#fff; font-size:${px(22)}px;">+30s</button>
+          </div>
+          <!-- Done -->
+          <button class="zepp-btn" style="position:absolute; left:${px(16)}px; top:${px(380)}px; width:${px(400)}px; height:${px(48)}px; border-radius:${px(16)}px; background:#3ddc97; color:#000; font-size:${px(24)}px;">Done</button>
+        `;
+      } else if (currentScreen === 'ring') {
+        container.innerHTML = `
+          <!-- Large Clock -->
+          <div class="zepp-widget" style="left:${px(20)}px; top:${px(120)}px; width:${px(392)}px; height:${px(100)}px;">
+            <span style="font-size:${px(80)}px; font-weight:700; color:#fff; letter-spacing:-1px;">07:30</span>
+          </div>
+          <!-- Message -->
+          <div class="zepp-widget" style="left:${px(20)}px; top:${px(230)}px; width:${px(392)}px; height:${px(65)}px;">
+            <span style="font-size:${px(28)}px; color:#3ddc97;">Wake up!</span>
+          </div>
+          <!-- Snooze 9m -->
+          <button class="zepp-btn" style="position:absolute; left:${px(40)}px; top:${px(340)}px; width:${px(160)}px; height:${px(80)}px; border-radius:${px(20)}px; background:#2c2c2e; color:#fff; font-size:${px(22)}px;">
+            Snooze 9m
+          </button>
+          <!-- Dismiss -->
+          <button class="zepp-btn" style="position:absolute; left:${px(232)}px; top:${px(340)}px; width:${px(160)}px; height:${px(80)}px; border-radius:${px(20)}px; background:#3ddc97; color:#000; font-size:${px(26)}px;">
+            Dismiss
+          </button>
+        `;
+      } else if (currentScreen === 'zombie') {
+        container.innerHTML = `
+          <!-- Header -->
+          <div class="zepp-widget" style="left:${px(20)}px; top:${px(24)}px; width:${px(392)}px; height:${px(40)}px;">
+            <span style="font-size:${px(30)}px; font-weight:bold; color:#3ddc97;">ZOMBIE WALK</span>
+          </div>
+          <div class="zepp-widget" style="left:${px(20)}px; top:${px(68)}px; width:${px(392)}px; height:${px(30)}px;">
+            <span style="font-size:${px(22)}px; color:#8e8e93;">Walk to turn off alarm</span>
+          </div>
+          <!-- Counter -->
+          <div class="zepp-widget" style="left:${px(20)}px; top:${px(114)}px; width:${px(392)}px; height:${px(84)}px;">
+            <span style="font-size:${px(64)}px; font-weight:bold; color:#fff;">12 / 30</span>
+          </div>
+          <div class="zepp-widget" style="left:${px(20)}px; top:${px(196)}px; width:${px(392)}px; height:${px(28)}px;">
+            <span style="font-size:${px(20)}px; color:#8e8e93;">steps walked</span>
+          </div>
+          <!-- Progress Bar -->
+          <div style="position:absolute; left:${px(40)}px; top:${px(236)}px; width:${px(352)}px; height:${px(16)}px; border-radius:${px(8)}px; background:#2c2c2e;">
+            <div style="width:40%; height:100%; border-radius:${px(8)}px; background:#3ddc97;"></div>
+          </div>
+          <!-- Countdown -->
+          <div class="zepp-widget" style="left:${px(20)}px; top:${px(270)}px; width:${px(392)}px; height:${px(36)}px;">
+            <span style="font-size:${px(22)}px; color:#8e8e93;">Alarm resumes in 2:48</span>
+          </div>
+          <!-- Snooze -->
+          <button class="zepp-btn" style="position:absolute; left:${px(116)}px; top:${px(330)}px; width:${px(200)}px; height:${px(64)}px; border-radius:${px(20)}px; background:#1c1c1e; color:#fff; font-size:${px(22)}px; border:1px solid #3a3a3c;">
+            Snooze 9m
+          </button>
+        `;
+      }
+    }
+
+    render();
+  </script>
+</body>
+</html>

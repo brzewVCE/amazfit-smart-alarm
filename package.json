@@ -9,6 +9,7 @@
     "build": "zeus build",
     "doctor": "zeus doctor",
     "serve:qr": "python3 scripts/serve_qr.py",
+    "preview:web": "python3 -m http.server 8085 --directory scripts",
     "test": "node --import ./test/register.mjs test/run.mjs"
   },
   "license": "MIT",

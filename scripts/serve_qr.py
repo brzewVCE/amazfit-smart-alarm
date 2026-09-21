@@ -112,16 +112,24 @@ def unpack_packages(dist_dir):
             if fname and stype:
                 zpk_types[fname] = (stype, res)
 
-        for name in z.namelist():
-            if not name.endswith(".zpk"):
-                continue
+        # Prioritize 390x450 for Amazfit Active 2 Square
+        def sort_key(name):
+            stype, res = zpk_types.get(name, ("", ""))
+            if res == "390x450":
+                return 0
+            if res == "466x466":
+                return 1
+            return 2
 
+        sorted_names = sorted([n for n in z.namelist() if n.endswith(".zpk")], key=sort_key)
+        for name in sorted_names:
             content = z.read(name)
             stype, res = zpk_types.get(name, ("", ""))
-            is_square = stype == "square" or "romew" in name or "rome" in name
-            is_round = stype == "round" or "milanw" in name or "milan" in name
+            is_square_390 = stype == "square" and res == "390x450"
+            is_square_432 = stype == "square" and res == "432x514"
+            is_round = stype == "round" or res == "466x466"
 
-            if is_square and "square" not in packages:
+            if is_square_390 and "square" not in packages:
                 zpk_name = "Smart_Alarm-Active2_Square.zpk"
                 direct_name = "Smart_Alarm-Active2_Square-direct.zip"
                 target_key = "square"
@@ -129,6 +137,14 @@ def unpack_packages(dist_dir):
                 zpk_name = "Smart_Alarm-Active2_Round.zpk"
                 direct_name = "Smart_Alarm-Active2_Round-direct.zip"
                 target_key = "round"
+            elif is_square_432 and "bip" not in packages:
+                zpk_name = "Smart_Alarm-BipMax_Square.zpk"
+                direct_name = "Smart_Alarm-BipMax_Square-direct.zip"
+                target_key = "bip"
+            elif (stype == "square" or "rome" in name) and "square" not in packages:
+                zpk_name = "Smart_Alarm-Active2_Square.zpk"
+                direct_name = "Smart_Alarm-Active2_Square-direct.zip"
+                target_key = "square"
             else:
                 continue
 
@@ -179,6 +195,11 @@ def create_handler(packages, template_path):
         DOWNLOAD_ROUTES["/download/round-zpk"] = (rd["zpk_path"], rd["zpk_name"], "application/octet-stream")
         DOWNLOAD_ROUTES["/download/round-zip"] = (rd["direct_path"], rd["direct_name"], "application/zip")
 
+    if "bip" in packages:
+        bp = packages["bip"]
+        DOWNLOAD_ROUTES["/download/bip-zpk"] = (bp["zpk_path"], bp["zpk_name"], "application/octet-stream")
+        DOWNLOAD_ROUTES["/download/bip-zip"] = (bp["direct_path"], bp["direct_name"], "application/zip")
+
     context = {
         "square_zpk_name": packages.get("square", {}).get("zpk_name", "Smart_Alarm-Active2_Square.zpk"),
         "square_zpk_size": packages.get("square", {}).get("zpk_size_kb", "15.0"),
@@ -188,6 +209,10 @@ def create_handler(packages, template_path):
         "round_zpk_size": packages.get("round", {}).get("zpk_size_kb", "15.0"),
         "round_direct_name": packages.get("round", {}).get("direct_name", "Smart_Alarm-Active2_Round-direct.zip"),
         "round_direct_size": packages.get("round", {}).get("direct_size_kb", "15.0"),
+        "bip_zpk_name": packages.get("bip", {}).get("zpk_name", "Smart_Alarm-BipMax_Square.zpk"),
+        "bip_zpk_size": packages.get("bip", {}).get("zpk_size_kb", "15.0"),
+        "bip_direct_name": packages.get("bip", {}).get("direct_name", "Smart_Alarm-BipMax_Square-direct.zip"),
+        "bip_direct_size": packages.get("bip", {}).get("direct_size_kb", "15.0"),
     }
     html_content = render_html_template(template_path, context)
 
