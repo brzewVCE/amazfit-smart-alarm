@@ -94,19 +94,38 @@ def unpack_packages(dist_dir):
     packages = {}
 
     with zipfile.ZipFile(latest_zab, "r") as z:
+        manifest = {}
+        if "manifest.json" in z.namelist():
+            try:
+                import json
+                manifest = json.loads(z.read("manifest.json").decode("utf-8"))
+            except Exception:
+                manifest = {}
+
+        # Map zpk file name -> screenType
+        zpk_types = {}
+        for item in manifest.get("zpks", []):
+            fname = item.get("name")
+            plats = item.get("platforms", [{}])
+            stype = plats[0].get("screenType", "").lower()
+            res = plats[0].get("screenResolution", "")
+            if fname and stype:
+                zpk_types[fname] = (stype, res)
+
         for name in z.namelist():
             if not name.endswith(".zpk"):
                 continue
 
             content = z.read(name)
-            is_square = "romew" in name or "rome" in name
-            is_round = "milanw" in name or "milan" in name
+            stype, res = zpk_types.get(name, ("", ""))
+            is_square = stype == "square" or "romew" in name or "rome" in name
+            is_round = stype == "round" or "milanw" in name or "milan" in name
 
-            if is_square:
+            if is_square and "square" not in packages:
                 zpk_name = "Smart_Alarm-Active2_Square.zpk"
                 direct_name = "Smart_Alarm-Active2_Square-direct.zip"
                 target_key = "square"
-            elif is_round:
+            elif is_round and "round" not in packages:
                 zpk_name = "Smart_Alarm-Active2_Round.zpk"
                 direct_name = "Smart_Alarm-Active2_Round-direct.zip"
                 target_key = "round"
@@ -123,7 +142,7 @@ def unpack_packages(dist_dir):
                 with zipfile.ZipFile(zpk_path, "r") as zpk_inner:
                     if "device.zip" in zpk_inner.namelist():
                         with open(direct_path, "wb") as f_dir:
-                            f_dir.write(zpkpk := zpk_inner.read("device.zip"))
+                            f_dir.write(zpk_inner.read("device.zip"))
             except Exception:
                 pass
 
