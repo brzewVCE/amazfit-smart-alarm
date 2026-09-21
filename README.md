@@ -81,8 +81,7 @@ relying on any single "smart alarm" primitive (Zepp OS doesn't have one).
   console for this app.
 - `assets/bip_max/icon.png` and the `switch_*.png` slide-switch art are
   small generated placeholders; swap in real artwork before release.
-- Targets only the Amazfit Bip Max (`deviceSource: 11206915`, API 4.0.4).
-  Add more entries under `targets` in `app.json` to support other watches.
+- Targets multiple Zepp OS devices (Amazfit Bip Max, Active 2 Square / romew, Active 2 Round / milanw, Rome, Milan). Add more entries under `targets` in `app.json` as needed.
 
 ## Building and running
 
@@ -175,6 +174,21 @@ whole codebase on every change, with no external dependencies.
     - **Anti-Exit Defenses**: Preventing groggy users from dismissing alarms by simply pressing the watch's physical crown/side button or swiping back. Achieved on Zepp OS via `@zos/interaction` (`onKey` and `onGesture` returning `true` to block OS navigation) coupled with persistent watchdog fallback alarms (`@zos/alarm`).
     - **Interactive Wake Challenges (CAPTCHAs)**: Math equations, shake-to-wake, and step counting challenges to ensure cognitive arousal before silencing the alarm.
     - **Community-driven ergonomics**: High-contrast, sleepy-friendly UI, dedicated vibration patterns, and customizable snooze intervals.
+
+## Roadmap & Upcoming Features
+
+- [ ] **Quick Access Watch Widget / Shortcut Card (Karta skrótów / Widget)**:
+  - Add native Zepp OS secondary widget page (`widget` / `secondary-widget` in `app.json`), accessible by swiping sideways from the main watch face.
+  - Provides a quick glance at the next upcoming alarm and its toggle state without opening the full application.
+  - 1-tap deep link directly into the alarm app.
+- [ ] **Next Alarm Countdown Indicator ("Za ile następny alarm")**:
+  - Dynamic countdown calculating exact remaining time until the next active alarm (e.g., *"Next alarm in 7h 24m"* / *"Następny alarm za 7 godz. 24 min."*).
+  - Displayed prominently on the main alarm list header (`page/index.page.js`).
+  - Integrated directly into the home screen Quick Access Widget.
+- [ ] **UI Visual Refresh & Dedicated Icon Pack (Odświeżenie UI i ikonki)**:
+  - Replace temporary glyphs and placeholders with custom high-definition icon assets.
+  - Dedicated iconography for alarm states, repeating days, Smart Wake (sleep wave), Snooze, and CAPTCHA challenge status (Zombie Walk, Steps, etc.).
+  - Polished micro-interactions and high-contrast styling optimized for AMOLED watch displays (both rectangular and circular).
 
 ## References
 

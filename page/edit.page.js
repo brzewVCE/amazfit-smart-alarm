@@ -92,11 +92,11 @@ Page({
    */
   renderHeader(y, title, onBack) {
     const isRound = isRoundScreen()
-    const backX = isRound ? 84 : 20
-    const backW = 96
-    const backH = 44
-    const titleX = isRound ? 188 : 124
-    const titleW = isRound ? 160 : 288
+    const backX = isRound ? 56 : 18
+    const backW = isRound ? 116 : 110
+    const backH = 52
+    const titleX = isRound ? 180 : 138
+    const titleW = isRound ? 230 : 276
 
     // Back Button - guaranteed within safe screen boundary
     this.track(
@@ -105,11 +105,11 @@ Page({
         y: px(y),
         w: px(backW),
         h: px(backH),
-        radius: px(14),
+        radius: px(16),
         normal_color: COLOR.surface,
         press_color: COLOR.border,
         text: '< Back',
-        text_size: px(22),
+        text_size: px(24),
         click_func: onBack,
       })
     )
@@ -122,7 +122,7 @@ Page({
         w: px(titleW),
         h: px(backH),
         text: title,
-        text_size: px(isRound ? 22 : 26),
+        text_size: px(isRound ? 24 : 26),
         color: COLOR.textDim,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
@@ -169,35 +169,39 @@ Page({
 
   renderTimePicker() {
     const pad = (n) => String(n).padStart(2, '0')
-    const titleBounds = getCenteredBounds(80, 36, 384)
+    const isRound = isRoundScreen()
+    let y = isRound ? 84 : 56
+
+    const titleBounds = getCenteredBounds(y, 40, 384)
 
     // Title
     this.track(
       createWidget(widget.TEXT, {
         x: px(titleBounds.x),
-        y: px(80),
+        y: px(y),
         w: px(titleBounds.w),
-        h: px(36),
+        h: px(40),
         text: 'Set Time',
-        text_size: px(26),
+        text_size: px(28),
         color: COLOR.textDim,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
       })
     )
+    y += 40 + 16
 
     // Hour Up Button (+)
     this.track(
       createWidget(widget.BUTTON, {
         x: px(46),
-        y: px(128),
-        w: px(140),
-        h: px(56),
-        radius: px(16),
+        y: px(y),
+        w: px(144),
+        h: px(62),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: '+',
-        text_size: px(34),
+        text_size: px(36),
         click_func: () => this.setTempHour(this.state.tempHour + 1),
       })
     )
@@ -205,31 +209,32 @@ Page({
     // Minute Up Button (+)
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(246),
-        y: px(128),
-        w: px(140),
-        h: px(56),
-        radius: px(16),
+        x: px(242),
+        y: px(y),
+        w: px(144),
+        h: px(62),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: '+',
-        text_size: px(34),
+        text_size: px(36),
         click_func: () => this.setTempMinute(this.state.tempMinute + 1),
       })
     )
+    y += 62 + 10
 
     // Hour Display Button (tap cycles +1)
     this.state.hourWidget = this.track(
       createWidget(widget.BUTTON, {
         x: px(46),
-        y: px(192),
-        w: px(140),
-        h: px(80),
-        radius: px(16),
+        y: px(y),
+        w: px(144),
+        h: px(88),
+        radius: px(18),
         normal_color: COLOR.surfaceAlt,
         press_color: COLOR.border,
         text: pad(this.state.tempHour),
-        text_size: px(52),
+        text_size: px(56),
         click_func: () => this.setTempHour(this.state.tempHour + 1),
       })
     )
@@ -238,11 +243,11 @@ Page({
     this.track(
       createWidget(widget.TEXT, {
         x: px(196),
-        y: px(192),
+        y: px(y),
         w: px(40),
-        h: px(80),
+        h: px(88),
         text: ':',
-        text_size: px(48),
+        text_size: px(52),
         color: COLOR.primary,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -252,31 +257,32 @@ Page({
     // Minute Display Button (tap cycles +5)
     this.state.minWidget = this.track(
       createWidget(widget.BUTTON, {
-        x: px(246),
-        y: px(192),
-        w: px(140),
-        h: px(80),
-        radius: px(16),
+        x: px(242),
+        y: px(y),
+        w: px(144),
+        h: px(88),
+        radius: px(18),
         normal_color: COLOR.surfaceAlt,
         press_color: COLOR.border,
         text: pad(this.state.tempMinute),
-        text_size: px(52),
+        text_size: px(56),
         click_func: () => this.setTempMinute(this.state.tempMinute + 5),
       })
     )
+    y += 88 + 10
 
     // Hour Down Button (-)
     this.track(
       createWidget(widget.BUTTON, {
         x: px(46),
-        y: px(280),
-        w: px(140),
-        h: px(56),
-        radius: px(16),
+        y: px(y),
+        w: px(144),
+        h: px(62),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: '-',
-        text_size: px(34),
+        text_size: px(36),
         click_func: () => this.setTempHour(this.state.tempHour - 1),
       })
     )
@@ -284,18 +290,19 @@ Page({
     // Minute Down Button (-)
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(246),
-        y: px(280),
-        w: px(140),
-        h: px(56),
-        radius: px(16),
+        x: px(242),
+        y: px(y),
+        w: px(144),
+        h: px(62),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: '-',
-        text_size: px(34),
+        text_size: px(36),
         click_func: () => this.setTempMinute(this.state.tempMinute - 1),
       })
     )
+    y += 62 + 20
 
     // Quick minute presets (:00, :15, :30, :45)
     const presets = [
@@ -304,37 +311,38 @@ Page({
       { label: ':30', val: 30 },
       { label: ':45', val: 45 },
     ]
-    const preW = 88
+    const preW = 90
     const preGap = 10
     presets.forEach((p, i) => {
       this.track(
         createWidget(widget.BUTTON, {
-          x: px(26 + i * (preW + preGap)),
-          y: px(346),
+          x: px(21 + i * (preW + preGap)),
+          y: px(y),
           w: px(preW),
-          h: px(44),
-          radius: px(12),
+          h: px(48),
+          radius: px(14),
           normal_color: COLOR.surface,
           press_color: COLOR.primaryDim,
           text: p.label,
-          text_size: px(22),
+          text_size: px(24),
           click_func: () => this.setTempMinute(p.val),
         })
       )
     })
+    y += 48 + 24
 
     // Cancel Button
     this.track(
       createWidget(widget.BUTTON, {
         x: px(24),
-        y: px(402),
+        y: px(y),
         w: px(184),
-        h: px(60),
-        radius: px(18),
+        h: px(64),
+        radius: px(20),
         normal_color: COLOR.surface,
         press_color: COLOR.border,
         text: 'Cancel',
-        text_size: px(26),
+        text_size: px(28),
         click_func: () => {
           this.state.mode = 'settings'
           this.render()
@@ -346,20 +354,32 @@ Page({
     this.track(
       createWidget(widget.BUTTON, {
         x: px(224),
-        y: px(402),
+        y: px(y),
         w: px(184),
-        h: px(60),
-        radius: px(18),
+        h: px(64),
+        radius: px(20),
         normal_color: COLOR.primary,
         press_color: COLOR.primaryDim,
         text: 'Confirm',
-        text_size: px(26),
+        text_size: px(28),
         click_func: () => {
           this.state.alarm.hour = this.state.tempHour
           this.state.alarm.minute = this.state.tempMinute
           this.state.mode = 'settings'
           this.render()
         },
+      })
+    )
+    y += 64 + 18
+
+    // Bottom scroll padding spacer using FILL_RECT
+    this.track(
+      createWidget(widget.FILL_RECT, {
+        x: px(0),
+        y: px(y),
+        w: px(DESIGN_WIDTH),
+        h: px(120),
+        color: COLOR.background,
       })
     )
   },
@@ -380,15 +400,15 @@ Page({
 
   /** A label + native SLIDE_SWITCH row. Returns the row height used. */
   renderSwitchRow(y, labelText, checked, onChange) {
-    const h = 40
+    const h = 50
     this.track(
       createWidget(widget.TEXT, {
-        x: px(16),
+        x: px(18),
         y: px(y),
         w: px(310),
         h: px(h),
         text: labelText,
-        text_size: px(24),
+        text_size: px(26),
         color: COLOR.text,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
@@ -398,7 +418,7 @@ Page({
     this.track(
       createWidget(widget.SLIDE_SWITCH, {
         x: px(340),
-        y: px(y),
+        y: px(y + 5),
         w: px(70),
         h: px(40),
         select_bg: 'switch_on.png',
@@ -459,15 +479,15 @@ Page({
     const available = getAvailableCaptchas()
 
     const isRound = isRoundScreen()
-    let y = isRound ? 46 : 34
+    let y = isRound ? 84 : 56
     y += this.renderHeader(y, 'CAPTCHA Menu', () => {
       this.state.mode = 'settings'
       this.render()
     })
-    y += 14
+    y += 20
 
     // Method selection buttons for all registered CAPTCHA strategies
-    const btnW = 180
+    const btnW = 184
     const totalW = available.length * btnW + (available.length - 1) * 12
     const startX = Math.floor((DESIGN_WIDTH - totalW) / 2)
     available.forEach((strat, i) => {
@@ -477,8 +497,8 @@ Page({
           x: px(startX + i * (btnW + 12)),
           y: px(y),
           w: px(btnW),
-          h: px(50),
-          radius: px(16),
+          h: px(60),
+          radius: px(18),
           normal_color: isSelected ? COLOR.primary : COLOR.surface,
           press_color: COLOR.primaryDim,
           text: strat.label,
@@ -490,40 +510,46 @@ Page({
         })
       )
     })
-    y += 50 + 10
+    y += 60 + 20
 
     // Delegate rendering specific configuration controls to the active strategy
     if (currentStrategy && currentStrategy.renderSettings) {
-      currentStrategy.renderSettings(this, alarm.captcha, () => this.render())
+      const nextY = currentStrategy.renderSettings(this, alarm.captcha, () => this.render(), y)
+      if (typeof nextY === 'number') {
+        y = nextY
+      } else {
+        y += 280
+      }
     }
 
     // Done button at bottom
-    const doneBounds = getCenteredBounds(406, 54, 384)
+    const doneBounds = getCenteredBounds(y, 64, 384)
     this.track(
       createWidget(widget.BUTTON, {
         x: px(doneBounds.x),
-        y: px(406),
+        y: px(y),
         w: px(doneBounds.w),
-        h: px(54),
-        radius: px(18),
+        h: px(64),
+        radius: px(20),
         normal_color: COLOR.primary,
         press_color: COLOR.primaryDim,
         text: 'Done',
-        text_size: px(26),
+        text_size: px(28),
         click_func: () => {
           this.state.mode = 'settings'
           this.render()
         },
       })
     )
+    y += 64 + 18
 
     // Bottom scroll padding spacer using FILL_RECT
     this.track(
       createWidget(widget.FILL_RECT, {
         x: px(0),
-        y: px(470),
+        y: px(y),
         w: px(DESIGN_WIDTH),
-        h: px(100),
+        h: px(150),
         color: COLOR.background,
       })
     )
@@ -533,18 +559,18 @@ Page({
     const alarm = this.state.alarm
 
     const isRound = isRoundScreen()
-    let y = isRound ? 46 : 34
+    let y = isRound ? 84 : 56
     y += this.renderHeader(y, 'Wake Mode', () => {
       this.state.mode = 'settings'
       this.render()
     })
-    y += 16
+    y += 20
 
     // Smart Wake toggle switch
     y += this.renderSwitchRow(y, 'Smart Wake', alarm.smart, (checked) => {
       this.setSmart(checked)
     })
-    y += 12
+    y += 20
 
     if (alarm.smart) {
       // Section label
@@ -553,17 +579,18 @@ Page({
           x: px(24),
           y: px(y),
           w: px(384),
-          h: px(28),
+          h: px(32),
           text: 'Wake window before alarm:',
-          text_size: px(22),
+          text_size: px(24),
           color: COLOR.textDim,
           align_h: align.LEFT,
+          align_v: align.CENTER_V,
         })
       )
-      y += 28 + 12
+      y += 32 + 14
 
       // Window option buttons: [10 min] [20 min] [30 min]
-      const optW = 118
+      const optW = 120
       const optGap = 12
       const startX = Math.floor((DESIGN_WIDTH - (3 * optW + 2 * optGap)) / 2)
 
@@ -574,12 +601,12 @@ Page({
             x: px(startX + i * (optW + optGap)),
             y: px(y),
             w: px(optW),
-            h: px(52),
-            radius: px(16),
+            h: px(62),
+            radius: px(18),
             normal_color: isSelected ? COLOR.primary : COLOR.surface,
             press_color: isSelected ? COLOR.primaryDim : COLOR.surfaceAlt,
             text: `${win} min`,
-            text_size: px(22),
+            text_size: px(24),
             click_func: () => {
               alarm.smartWindow = win
               this.render()
@@ -587,10 +614,10 @@ Page({
           })
         )
       })
-      y += 52 + 14
+      y += 62 + 20
 
       // Explanatory description
-      const descH = 150
+      const descH = 160
       this.track(
         createWidget(widget.TEXT, {
           x: px(24),
@@ -598,24 +625,6 @@ Page({
           w: px(384),
           h: px(descH),
           text: `Monitors light sleep within ${alarm.smartWindow} min before alarm time to wake you up gently at the optimal moment.`,
-          text_size: px(20),
-          color: COLOR.textDim,
-          align_h: align.CENTER_H,
-          align_v: align.TOP,
-          text_style: text_style.WRAP,
-        })
-      )
-      y += descH + 16
-    } else {
-      // Off state explanation - generous height and top-aligned so it never gets clipped
-      const textH = 220
-      this.track(
-        createWidget(widget.TEXT, {
-          x: px(24),
-          y: px(y),
-          w: px(384),
-          h: px(textH),
-          text: 'Smart Wake is disabled.\n\nAlarm will ring exactly at the scheduled time.',
           text_size: px(22),
           color: COLOR.textDim,
           align_h: align.CENTER_H,
@@ -623,29 +632,47 @@ Page({
           text_style: text_style.WRAP,
         })
       )
-      y += textH + 20
+      y += descH + 24
+    } else {
+      // Off state explanation - generous height and top-aligned so it never gets clipped
+      const textH = 240
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(24),
+          y: px(y),
+          w: px(384),
+          h: px(textH),
+          text: 'Smart Wake is disabled.\n\nAlarm will ring exactly at the scheduled time.',
+          text_size: px(24),
+          color: COLOR.textDim,
+          align_h: align.CENTER_H,
+          align_v: align.TOP,
+          text_style: text_style.WRAP,
+        })
+      )
+      y += textH + 28
     }
 
     // Done button at bottom
-    const doneBounds = getCenteredBounds(y, 54, 384)
+    const doneBounds = getCenteredBounds(y, 64, 384)
     this.track(
       createWidget(widget.BUTTON, {
         x: px(doneBounds.x),
         y: px(y),
         w: px(doneBounds.w),
-        h: px(54),
-        radius: px(18),
+        h: px(64),
+        radius: px(20),
         normal_color: COLOR.primary,
         press_color: COLOR.primaryDim,
         text: 'Done',
-        text_size: px(26),
+        text_size: px(28),
         click_func: () => {
           this.state.mode = 'settings'
           this.render()
         },
       })
     )
-    y += 54 + 14
+    y += 64 + 18
 
     // Bottom scroll padding spacer using FILL_RECT
     this.track(
@@ -653,7 +680,7 @@ Page({
         x: px(0),
         y: px(y),
         w: px(DESIGN_WIDTH),
-        h: px(100),
+        h: px(150),
         color: COLOR.background,
       })
     )
@@ -664,19 +691,19 @@ Page({
     const isSnoozeOn = alarm.snooze !== false
 
     const isRound = isRoundScreen()
-    let y = isRound ? 46 : 34
+    let y = isRound ? 84 : 56
     y += this.renderHeader(y, 'Snooze', () => {
       this.state.mode = 'settings'
       this.render()
     })
-    y += 16
+    y += 20
 
     // Snooze toggle switch
     y += this.renderSwitchRow(y, 'Enable Snooze', isSnoozeOn, (checked) => {
       alarm.snooze = checked
       this.render()
     })
-    y += 12
+    y += 20
 
     if (isSnoozeOn) {
       const currentMin = alarm.snoozeMinutes || DEFAULT_SNOOZE_MINUTES
@@ -687,17 +714,18 @@ Page({
           x: px(24),
           y: px(y),
           w: px(384),
-          h: px(28),
+          h: px(32),
           text: 'Snooze duration:',
-          text_size: px(22),
+          text_size: px(24),
           color: COLOR.textDim,
           align_h: align.LEFT,
+          align_v: align.CENTER_V,
         })
       )
-      y += 28 + 12
+      y += 32 + 14
 
       // Duration option buttons: [5m] [10m] [15m] [20m]
-      const optW = 88
+      const optW = 90
       const optGap = 10
       const startX = Math.floor((DESIGN_WIDTH - (4 * optW + 3 * optGap)) / 2)
 
@@ -708,12 +736,12 @@ Page({
             x: px(startX + i * (optW + optGap)),
             y: px(y),
             w: px(optW),
-            h: px(52),
-            radius: px(16),
+            h: px(60),
+            radius: px(18),
             normal_color: isSelected ? COLOR.primary : COLOR.surface,
             press_color: isSelected ? COLOR.primaryDim : COLOR.surfaceAlt,
             text: `${min} min`,
-            text_size: px(20),
+            text_size: px(22),
             click_func: () => {
               alarm.snoozeMinutes = min
               this.render()
@@ -721,10 +749,10 @@ Page({
           })
         )
       })
-      y += 52 + 14
+      y += 60 + 20
 
       // Explanatory description
-      const descH = 150
+      const descH = 160
       this.track(
         createWidget(widget.TEXT, {
           x: px(24),
@@ -732,24 +760,6 @@ Page({
           w: px(384),
           h: px(descH),
           text: `Allows postponing alarm for ${currentMin} minutes when ringing. Snooze button will appear on the ringing screen.`,
-          text_size: px(20),
-          color: COLOR.textDim,
-          align_h: align.CENTER_H,
-          align_v: align.TOP,
-          text_style: text_style.WRAP,
-        })
-      )
-      y += descH + 16
-    } else {
-      // Off state explanation - generous height and top-aligned so it never gets clipped
-      const textH = 220
-      this.track(
-        createWidget(widget.TEXT, {
-          x: px(24),
-          y: px(y),
-          w: px(384),
-          h: px(textH),
-          text: 'Snooze is disabled.\n\nAlarm can only be dismissed when ringing — no snooze button will be shown.',
           text_size: px(22),
           color: COLOR.textDim,
           align_h: align.CENTER_H,
@@ -757,29 +767,47 @@ Page({
           text_style: text_style.WRAP,
         })
       )
-      y += textH + 20
+      y += descH + 24
+    } else {
+      // Off state explanation - generous height and top-aligned so it never gets clipped
+      const textH = 240
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(24),
+          y: px(y),
+          w: px(384),
+          h: px(textH),
+          text: 'Snooze is disabled.\n\nAlarm can only be dismissed when ringing — no snooze button will be shown.',
+          text_size: px(24),
+          color: COLOR.textDim,
+          align_h: align.CENTER_H,
+          align_v: align.TOP,
+          text_style: text_style.WRAP,
+        })
+      )
+      y += textH + 28
     }
 
     // Done button at bottom
-    const doneBounds = getCenteredBounds(y, 54, 384)
+    const doneBounds = getCenteredBounds(y, 64, 384)
     this.track(
       createWidget(widget.BUTTON, {
         x: px(doneBounds.x),
         y: px(y),
         w: px(doneBounds.w),
-        h: px(54),
-        radius: px(18),
+        h: px(64),
+        radius: px(20),
         normal_color: COLOR.primary,
         press_color: COLOR.primaryDim,
         text: 'Done',
-        text_size: px(26),
+        text_size: px(28),
         click_func: () => {
           this.state.mode = 'settings'
           this.render()
         },
       })
     )
-    y += 54 + 14
+    y += 64 + 18
 
     // Bottom scroll padding spacer using FILL_RECT
     this.track(
@@ -787,7 +815,7 @@ Page({
         x: px(0),
         y: px(y),
         w: px(DESIGN_WIDTH),
-        h: px(100),
+        h: px(150),
         color: COLOR.background,
       })
     )
@@ -804,21 +832,21 @@ Page({
     }
 
     const isRound = isRoundScreen()
-    let y = isRound ? 46 : 34
+    let y = isRound ? 84 : 56
     y += this.renderHeader(y, this.state.isNew ? 'New Alarm' : 'Edit Alarm', () => back())
-    y += 12
+    y += 18
 
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
+        x: px(18),
         y: px(y),
-        w: px(400),
-        h: px(74),
-        radius: px(20),
+        w: px(396),
+        h: px(88),
+        radius: px(22),
         normal_color: COLOR.surfaceAlt,
         press_color: COLOR.border,
         text: formatTime(alarm.hour, alarm.minute),
-        text_size: px(52),
+        text_size: px(56),
         click_func: () => {
           this.state.tempHour = alarm.hour
           this.state.tempMinute = alarm.minute
@@ -827,12 +855,12 @@ Page({
         },
       })
     )
-    y += 74 + 8
+    y += 88 + 18
 
     y += this.renderSwitchRow(y, 'Alarm enabled', alarm.enabled, (checked) =>
       this.setEnabled(checked)
     )
-    y += 8
+    y += 18
 
     const dayW = 52
     const dayGap = 6
@@ -843,17 +871,17 @@ Page({
           x: px(16 + i * (dayW + dayGap)),
           y: px(y),
           w: px(dayW),
-          h: px(46),
-          radius: px(12),
+          h: px(54),
+          radius: px(14),
           normal_color: active ? COLOR.primary : COLOR.surface,
           press_color: COLOR.primaryDim,
           text: day.label,
-          text_size: px(22),
+          text_size: px(24),
           click_func: () => this.toggleDay(i),
         })
       )
     })
-    y += 46 + 8
+    y += 54 + 20
 
     // Wake Mode edit window button
     const wakeLabel = alarm.smart
@@ -861,22 +889,22 @@ Page({
       : 'Wake Mode: Standard (Off)'
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
+        x: px(18),
         y: px(y),
-        w: px(400),
-        h: px(44),
-        radius: px(14),
+        w: px(396),
+        h: px(60),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.border,
         text: wakeLabel,
-        text_size: px(22),
+        text_size: px(24),
         click_func: () => {
           this.state.mode = 'smart'
           this.render()
         },
       })
     )
-    y += 44 + 6
+    y += 60 + 14
 
     // Snooze edit window button
     const isSnoozeOn = alarm.snooze !== false
@@ -886,22 +914,22 @@ Page({
       : 'Snooze: Off'
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
+        x: px(18),
         y: px(y),
-        w: px(400),
-        h: px(44),
-        radius: px(14),
+        w: px(396),
+        h: px(60),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.border,
         text: snoozeLabel,
-        text_size: px(22),
+        text_size: px(24),
         click_func: () => {
           this.state.mode = 'snooze'
           this.render()
         },
       })
     )
-    y += 44 + 6
+    y += 60 + 14
 
     // CAPTCHA settings button
     const currentStrategy = getCaptcha(alarm.captcha.type)
@@ -912,60 +940,60 @@ Page({
 
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(16),
+        x: px(18),
         y: px(y),
-        w: px(400),
-        h: px(44),
-        radius: px(14),
+        w: px(396),
+        h: px(60),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.border,
         text: captchaLabel,
-        text_size: px(22),
+        text_size: px(24),
         click_func: () => {
           this.state.mode = 'captcha'
           this.render()
         },
       })
     )
-    y += 44 + 8
+    y += 60 + 20
 
     // Save button
-    const saveBounds = getCenteredBounds(y, 52, 384)
+    const saveBounds = getCenteredBounds(y, 64, 384)
     this.track(
       createWidget(widget.BUTTON, {
         x: px(saveBounds.x),
         y: px(y),
         w: px(saveBounds.w),
-        h: px(52),
-        radius: px(16),
+        h: px(64),
+        radius: px(20),
         normal_color: COLOR.primary,
         press_color: COLOR.primaryDim,
         text: 'Save',
-        text_size: px(26),
+        text_size: px(28),
         click_func: () => this.saveAndExit(),
       })
     )
-    y += 52 + 12
+    y += 64 + 18
 
     // Delete Alarm button at bottom (for existing alarms)
     if (!this.state.isNew) {
-      const delBounds = getCenteredBounds(y, 52, 384)
+      const delBounds = getCenteredBounds(y, 60, 384)
       this.track(
         createWidget(widget.BUTTON, {
           x: px(delBounds.x),
           y: px(y),
           w: px(delBounds.w),
-          h: px(52),
-          radius: px(16),
+          h: px(60),
+          radius: px(20),
           normal_color: COLOR.surface,
           press_color: COLOR.danger,
           text: 'Delete Alarm',
           color: COLOR.danger,
-          text_size: px(24),
+          text_size: px(26),
           click_func: () => this.deleteAndExit(),
         })
       )
-      y += 52 + 12
+      y += 60 + 20
     }
 
     // Bottom scroll padding spacer using FILL_RECT so Zepp OS layout engine registers full scrollable height
@@ -974,7 +1002,7 @@ Page({
         x: px(0),
         y: px(y),
         w: px(DESIGN_WIDTH),
-        h: px(120),
+        h: px(160),
         color: COLOR.background,
       })
     )

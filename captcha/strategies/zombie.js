@@ -133,37 +133,40 @@ export class ZombieWalkStrategy extends ProgressiveChallengeStrategy {
    * Renders the configuration controls for Zombie Walk in the edit page.
    * Uses horizontally centered controls with safe margins for square screens.
    */
-  renderSettings(page, config, onUpdate) {
+  renderSettings(page, config, onUpdate, startY = 180) {
     if (!config.steps) config.steps = DEFAULT_ZOMBIE_STEPS
     if (!config.timeoutSec) config.timeoutSec = DEFAULT_ZOMBIE_TIMEOUT_SEC
+
+    let y = startY
 
     // Steps section label
     page.track(
       createWidget(widget.TEXT, {
         x: px(24),
-        y: px(152),
+        y: px(y),
         w: px(384),
-        h: px(28),
+        h: px(32),
         text: 'Steps to dismiss:',
-        text_size: px(22),
+        text_size: px(24),
         color: COLOR.textDim,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
       })
     )
+    y += 32 + 12
 
     // [-5] button
     page.track(
       createWidget(widget.BUTTON, {
         x: px(24),
-        y: px(182),
-        w: px(100),
-        h: px(52),
-        radius: px(16),
+        y: px(y),
+        w: px(104),
+        h: px(60),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `-${ZOMBIE_STEPS_STEP}`,
-        text_size: px(24),
+        text_size: px(26),
         click_func: () => {
           config.steps = Math.max(
             ZOMBIE_STEPS_MIN,
@@ -178,11 +181,11 @@ export class ZombieWalkStrategy extends ProgressiveChallengeStrategy {
     page.track(
       createWidget(widget.TEXT, {
         x: px(136),
-        y: px(182),
+        y: px(y),
         w: px(160),
-        h: px(52),
+        h: px(60),
         text: `${config.steps} steps`,
-        text_size: px(24),
+        text_size: px(26),
         color: COLOR.primary,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -192,15 +195,15 @@ export class ZombieWalkStrategy extends ProgressiveChallengeStrategy {
     // [+5] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(308),
-        y: px(182),
-        w: px(100),
-        h: px(52),
-        radius: px(16),
+        x: px(304),
+        y: px(y),
+        w: px(104),
+        h: px(60),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `+${ZOMBIE_STEPS_STEP}`,
-        text_size: px(24),
+        text_size: px(26),
         click_func: () => {
           config.steps = Math.max(
             ZOMBIE_STEPS_MIN,
@@ -210,34 +213,36 @@ export class ZombieWalkStrategy extends ProgressiveChallengeStrategy {
         },
       })
     )
+    y += 60 + 20
 
     // Timeout section label
     page.track(
       createWidget(widget.TEXT, {
         x: px(24),
-        y: px(244),
+        y: px(y),
         w: px(384),
-        h: px(28),
+        h: px(32),
         text: 'Timeout (resumes alarm):',
-        text_size: px(22),
+        text_size: px(24),
         color: COLOR.textDim,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
       })
     )
+    y += 32 + 12
 
     // [-30s] button
     page.track(
       createWidget(widget.BUTTON, {
         x: px(24),
-        y: px(274),
-        w: px(100),
-        h: px(52),
-        radius: px(16),
+        y: px(y),
+        w: px(104),
+        h: px(60),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `-${ZOMBIE_TIMEOUT_STEP_SEC}s`,
-        text_size: px(22),
+        text_size: px(24),
         click_func: () => {
           config.timeoutSec = Math.max(
             ZOMBIE_TIMEOUT_MIN_SEC,
@@ -252,11 +257,11 @@ export class ZombieWalkStrategy extends ProgressiveChallengeStrategy {
     page.track(
       createWidget(widget.TEXT, {
         x: px(136),
-        y: px(274),
+        y: px(y),
         w: px(160),
-        h: px(52),
+        h: px(60),
         text: `${formatDuration(config.timeoutSec)} min`,
-        text_size: px(24),
+        text_size: px(26),
         color: COLOR.text,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
@@ -266,15 +271,15 @@ export class ZombieWalkStrategy extends ProgressiveChallengeStrategy {
     // [+30s] button
     page.track(
       createWidget(widget.BUTTON, {
-        x: px(308),
-        y: px(274),
-        w: px(100),
-        h: px(52),
-        radius: px(16),
+        x: px(304),
+        y: px(y),
+        w: px(104),
+        h: px(60),
+        radius: px(18),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: `+${ZOMBIE_TIMEOUT_STEP_SEC}s`,
-        text_size: px(22),
+        text_size: px(24),
         click_func: () => {
           config.timeoutSec = Math.max(
             ZOMBIE_TIMEOUT_MIN_SEC,
@@ -284,22 +289,27 @@ export class ZombieWalkStrategy extends ProgressiveChallengeStrategy {
         },
       })
     )
+    y += 60 + 20
 
     // Explanatory text
+    const textH = 70
     page.track(
       createWidget(widget.TEXT, {
         x: px(24),
-        y: px(336),
+        y: px(y),
         w: px(384),
-        h: px(50),
+        h: px(textH),
         text: `Walk ${config.steps} steps within ${formatDuration(config.timeoutSec)}.\nIf time expires, alarm resumes ringing.`,
-        text_size: px(18),
+        text_size: px(20),
         color: COLOR.textDim,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
         text_style: text_style.WRAP,
       })
     )
+    y += textH + 24
+
+    return y
   }
 
   onChallengeInit(config) {

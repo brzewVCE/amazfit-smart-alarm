@@ -19,21 +19,23 @@ export class NoneCaptchaStrategy extends CaptchaStrategy {
     return 'None'
   }
 
-  renderSettings(page) {
+  renderSettings(page, config, onChange, startY = 180) {
+    const textH = 100
     page.track(
       createWidget(widget.TEXT, {
-        x: px(20),
-        y: px(160),
-        w: px(392),
-        h: px(60),
+        x: px(24),
+        y: px(startY),
+        w: px(384),
+        h: px(textH),
         text: 'Standard alarm.\nTapping Dismiss turns off alarm immediately.',
-        text_size: px(22),
+        text_size: px(24),
         color: COLOR.textDim,
         align_h: align.CENTER_H,
         align_v: align.CENTER_V,
         text_style: text_style.WRAP,
       })
     )
+    return startY + textH + 20
   }
 
   start(ctx) {
