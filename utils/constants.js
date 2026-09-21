@@ -61,3 +61,28 @@ export function daysSummary(days) {
   }
   return picked.join(' ')
 }
+
+// CAPTCHA method types (extensible for future methods like math or shake).
+export const CAPTCHA_TYPE = {
+  NONE: 'none',
+  ZOMBIE: 'zombie',
+}
+
+// Zombie Walk configuration: steps default to 30, adjustable in increments of 5.
+export const DEFAULT_ZOMBIE_STEPS = 30
+export const ZOMBIE_STEPS_STEP = 5
+export const ZOMBIE_STEPS_MIN = 10
+export const ZOMBIE_STEPS_MAX = 200
+
+// Zombie Walk timeout: defaults to 3 minutes (180s), adjustable in increments of 30 seconds.
+export const DEFAULT_ZOMBIE_TIMEOUT_SEC = 180
+export const ZOMBIE_TIMEOUT_STEP_SEC = 30
+export const ZOMBIE_TIMEOUT_MIN_SEC = 60
+export const ZOMBIE_TIMEOUT_MAX_SEC = 600
+
+export function formatDuration(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+

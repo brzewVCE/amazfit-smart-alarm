@@ -9,7 +9,22 @@ import {
   upsertAlarm,
 } from '../utils/alarm-store'
 import { scheduleAlarm, cancelNative } from '../utils/alarm-scheduler'
-import { COLOR, WEEKDAYS, SMART_WINDOWS, formatTime } from '../utils/constants'
+import {
+  COLOR,
+  WEEKDAYS,
+  SMART_WINDOWS,
+  formatTime,
+  CAPTCHA_TYPE,
+  DEFAULT_ZOMBIE_STEPS,
+  ZOMBIE_STEPS_STEP,
+  ZOMBIE_STEPS_MIN,
+  ZOMBIE_STEPS_MAX,
+  DEFAULT_ZOMBIE_TIMEOUT_SEC,
+  ZOMBIE_TIMEOUT_STEP_SEC,
+  ZOMBIE_TIMEOUT_MIN_SEC,
+  ZOMBIE_TIMEOUT_MAX_SEC,
+  formatDuration,
+} from '../utils/constants'
 
 function parseParams(paramsStr) {
   const out = {}
@@ -66,6 +81,8 @@ Page({
     this.clear()
     if (this.state.mode === 'time') {
       this.renderTimePicker()
+    } else if (this.state.mode === 'captcha') {
+      this.renderCaptchaMenu()
     } else {
       this.renderSettings()
     }
@@ -355,15 +372,288 @@ Page({
     back()
   },
 
+  setCaptchaType(type) {
+    if (!this.state.alarm.captcha) {
+      this.state.alarm.captcha = {
+        type: CAPTCHA_TYPE.ZOMBIE,
+        steps: DEFAULT_ZOMBIE_STEPS,
+        timeoutSec: DEFAULT_ZOMBIE_TIMEOUT_SEC,
+      }
+    }
+    this.state.alarm.captcha.type = type
+    this.render()
+  },
+
+  adjustZombieSteps(delta) {
+    const c = this.state.alarm.captcha
+    c.steps = Math.max(ZOMBIE_STEPS_MIN, Math.min(ZOMBIE_STEPS_MAX, c.steps + delta))
+    this.render()
+  },
+
+  adjustZombieTimeout(deltaSec) {
+    const c = this.state.alarm.captcha
+    c.timeoutSec = Math.max(
+      ZOMBIE_TIMEOUT_MIN_SEC,
+      Math.min(ZOMBIE_TIMEOUT_MAX_SEC, c.timeoutSec + deltaSec)
+    )
+    this.render()
+  },
+
+  renderCaptchaMenu() {
+    const alarm = this.state.alarm
+    if (!alarm.captcha) {
+      alarm.captcha = {
+        type: CAPTCHA_TYPE.ZOMBIE,
+        steps: DEFAULT_ZOMBIE_STEPS,
+        timeoutSec: DEFAULT_ZOMBIE_TIMEOUT_SEC,
+      }
+    }
+    const isZombie = alarm.captcha.type === CAPTCHA_TYPE.ZOMBIE
+
+    // Header Back button
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(10),
+        w: px(90),
+        h: px(44),
+        radius: px(14),
+        normal_color: COLOR.surface,
+        press_color: COLOR.border,
+        text: 'Back',
+        text_size: px(24),
+        click_func: () => {
+          this.state.mode = 'settings'
+          this.render()
+        },
+      })
+    )
+
+    // Header Title
+    this.track(
+      createWidget(widget.TEXT, {
+        x: px(116),
+        y: px(10),
+        w: px(300),
+        h: px(44),
+        text: 'CAPTCHA Menu',
+        text_size: px(26),
+        color: COLOR.textDim,
+        align_h: align.CENTER_H,
+        align_v: align.CENTER_V,
+      })
+    )
+
+    // Method selection buttons: None vs Zombie Walk
+    const btnW = 194
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(68),
+        w: px(btnW),
+        h: px(52),
+        radius: px(16),
+        normal_color: !isZombie ? COLOR.primary : COLOR.surface,
+        press_color: COLOR.primaryDim,
+        text: 'None',
+        text_size: px(26),
+        click_func: () => this.setCaptchaType(CAPTCHA_TYPE.NONE),
+      })
+    )
+
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(222),
+        y: px(68),
+        w: px(btnW),
+        h: px(52),
+        radius: px(16),
+        normal_color: isZombie ? COLOR.primary : COLOR.surface,
+        press_color: COLOR.primaryDim,
+        text: 'Zombie Walk',
+        text_size: px(24),
+        click_func: () => this.setCaptchaType(CAPTCHA_TYPE.ZOMBIE),
+      })
+    )
+
+    if (isZombie) {
+      // Steps section label
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(16),
+          y: px(132),
+          w: px(400),
+          h: px(28),
+          text: 'Steps to dismiss:',
+          text_size: px(22),
+          color: COLOR.textDim,
+          align_h: align.LEFT,
+          align_v: align.CENTER_V,
+        })
+      )
+
+      // [-5] button
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(16),
+          y: px(164),
+          w: px(110),
+          h: px(52),
+          radius: px(16),
+          normal_color: COLOR.surface,
+          press_color: COLOR.surfaceAlt,
+          text: `-${ZOMBIE_STEPS_STEP}`,
+          text_size: px(26),
+          click_func: () => this.adjustZombieSteps(-ZOMBIE_STEPS_STEP),
+        })
+      )
+
+      // Steps display
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(136),
+          y: px(164),
+          w: px(160),
+          h: px(52),
+          text: `${alarm.captcha.steps} steps`,
+          text_size: px(26),
+          color: COLOR.primary,
+          align_h: align.CENTER_H,
+          align_v: align.CENTER_V,
+        })
+      )
+
+      // [+5] button
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(306),
+          y: px(164),
+          w: px(110),
+          h: px(52),
+          radius: px(16),
+          normal_color: COLOR.surface,
+          press_color: COLOR.surfaceAlt,
+          text: `+${ZOMBIE_STEPS_STEP}`,
+          text_size: px(26),
+          click_func: () => this.adjustZombieSteps(ZOMBIE_STEPS_STEP),
+        })
+      )
+
+      // Timeout section label
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(16),
+          y: px(228),
+          w: px(400),
+          h: px(28),
+          text: 'Timeout (resumes alarm):',
+          text_size: px(22),
+          color: COLOR.textDim,
+          align_h: align.LEFT,
+          align_v: align.CENTER_V,
+        })
+      )
+
+      // [-30s] button
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(16),
+          y: px(260),
+          w: px(110),
+          h: px(52),
+          radius: px(16),
+          normal_color: COLOR.surface,
+          press_color: COLOR.surfaceAlt,
+          text: `-${ZOMBIE_TIMEOUT_STEP_SEC}s`,
+          text_size: px(24),
+          click_func: () => this.adjustZombieTimeout(-ZOMBIE_TIMEOUT_STEP_SEC),
+        })
+      )
+
+      // Timeout display
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(136),
+          y: px(260),
+          w: px(160),
+          h: px(52),
+          text: `${formatDuration(alarm.captcha.timeoutSec)} min`,
+          text_size: px(26),
+          color: COLOR.text,
+          align_h: align.CENTER_H,
+          align_v: align.CENTER_V,
+        })
+      )
+
+      // [+30s] button
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(306),
+          y: px(260),
+          w: px(110),
+          h: px(52),
+          radius: px(16),
+          normal_color: COLOR.surface,
+          press_color: COLOR.surfaceAlt,
+          text: `+${ZOMBIE_TIMEOUT_STEP_SEC}s`,
+          text_size: px(24),
+          click_func: () => this.adjustZombieTimeout(ZOMBIE_TIMEOUT_STEP_SEC),
+        })
+      )
+
+      // Helper description
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(16),
+          y: px(322),
+          w: px(400),
+          h: px(50),
+          text: `Walk ${alarm.captcha.steps} steps within ${formatDuration(alarm.captcha.timeoutSec)}.\nIf time expires, alarm rings again.`,
+          text_size: px(19),
+          color: COLOR.textDim,
+          align_h: align.CENTER_H,
+          align_v: align.CENTER_V,
+          text_style: text_style.WRAP,
+        })
+      )
+    }
+
+    // Done button at bottom
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(420),
+        w: px(400),
+        h: px(56),
+        radius: px(18),
+        normal_color: COLOR.primary,
+        press_color: COLOR.primaryDim,
+        text: 'Done',
+        text_size: px(28),
+        click_func: () => {
+          this.state.mode = 'settings'
+          this.render()
+        },
+      })
+    )
+  },
+
   renderSettings() {
     const alarm = this.state.alarm
+    if (!alarm.captcha) {
+      alarm.captcha = {
+        type: CAPTCHA_TYPE.ZOMBIE,
+        steps: DEFAULT_ZOMBIE_STEPS,
+        timeoutSec: DEFAULT_ZOMBIE_TIMEOUT_SEC,
+      }
+    }
 
     this.track(
       createWidget(widget.BUTTON, {
         x: px(16),
-        y: px(14),
+        y: px(10),
         w: px(90),
-        h: px(50),
+        h: px(44),
         radius: px(14),
         normal_color: COLOR.surface,
         press_color: COLOR.border,
@@ -377,9 +667,9 @@ Page({
       this.track(
         createWidget(widget.BUTTON, {
           x: px(300),
-          y: px(14),
+          y: px(10),
           w: px(96),
-          h: px(50),
+          h: px(44),
           radius: px(14),
           normal_color: COLOR.surface,
           press_color: COLOR.danger,
@@ -390,19 +680,19 @@ Page({
       )
     }
 
-    let y = 70
+    let y = 58
 
     this.track(
       createWidget(widget.BUTTON, {
         x: px(16),
         y: px(y),
         w: px(400),
-        h: px(90),
+        h: px(74),
         radius: px(20),
         normal_color: COLOR.surfaceAlt,
         press_color: COLOR.border,
         text: formatTime(alarm.hour, alarm.minute),
-        text_size: px(56),
+        text_size: px(52),
         click_func: () => {
           this.state.tempHour = alarm.hour
           this.state.tempMinute = alarm.minute
@@ -411,12 +701,12 @@ Page({
         },
       })
     )
-    y += 90 + 10
+    y += 74 + 8
 
     y += this.renderSwitchRow(y, 'Alarm enabled', alarm.enabled, (checked) =>
       this.setEnabled(checked)
     )
-    y += 12
+    y += 8
 
     const dayW = 52
     const dayGap = 6
@@ -427,22 +717,22 @@ Page({
           x: px(16 + i * (dayW + dayGap)),
           y: px(y),
           w: px(dayW),
-          h: px(52),
+          h: px(46),
           radius: px(12),
           normal_color: active ? COLOR.primary : COLOR.surface,
           press_color: COLOR.primaryDim,
           text: day.label,
-          text_size: px(24),
+          text_size: px(22),
           click_func: () => this.toggleDay(i),
         })
       )
     })
-    y += 52 + 12
+    y += 46 + 8
 
     y += this.renderSwitchRow(y, 'Smart Wake', alarm.smart, (checked) =>
       this.setSmart(checked)
     )
-    y += 10
+    y += 6
 
     if (alarm.smart) {
       this.track(
@@ -450,33 +740,58 @@ Page({
           x: px(16),
           y: px(y),
           w: px(400),
-          h: px(48),
-          radius: px(14),
+          h: px(40),
+          radius: px(12),
           normal_color: COLOR.surface,
           press_color: COLOR.border,
           text: `Wake window: ${alarm.smartWindow} min before`,
-          text_size: px(22),
+          text_size: px(20),
           click_func: () => this.cycleSmartWindow(),
         })
       )
-      y += 48 + 10
+      y += 40 + 6
     }
+
+    // CAPTCHA settings button
+    const captchaLabel =
+      alarm.captcha.type === CAPTCHA_TYPE.ZOMBIE
+        ? `CAPTCHA: Zombie (${alarm.captcha.steps} st, ${formatDuration(alarm.captcha.timeoutSec)})`
+        : 'CAPTCHA: None'
 
     this.track(
       createWidget(widget.BUTTON, {
         x: px(16),
         y: px(y),
         w: px(400),
-        h: px(60),
-        radius: px(18),
+        h: px(44),
+        radius: px(14),
+        normal_color: COLOR.surface,
+        press_color: COLOR.border,
+        text: captchaLabel,
+        text_size: px(22),
+        click_func: () => {
+          this.state.mode = 'captcha'
+          this.render()
+        },
+      })
+    )
+    y += 44 + 8
+
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(y),
+        w: px(400),
+        h: px(50),
+        radius: px(16),
         normal_color: COLOR.primary,
         press_color: COLOR.primaryDim,
         text: 'Save',
-        text_size: px(30),
+        text_size: px(28),
         click_func: () => this.saveAndExit(),
       })
     )
-    y += 60 + 12
+    y += 50 + 8
 
     if (!this.state.isNew) {
       this.track(
@@ -484,12 +799,12 @@ Page({
           x: px(16),
           y: px(y),
           w: px(400),
-          h: px(56),
-          radius: px(18),
+          h: px(46),
+          radius: px(16),
           normal_color: COLOR.danger,
           press_color: 0x992222,
           text: 'Delete Alarm',
-          text_size: px(26),
+          text_size: px(24),
           click_func: () => this.deleteAndExit(),
         })
       )

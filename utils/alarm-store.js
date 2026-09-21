@@ -1,7 +1,20 @@
 import { LocalStorage } from '@zos/storage'
-import { STORAGE_KEY_ALARMS, STORAGE_KEY_NEXT_ID } from './constants'
+import {
+  STORAGE_KEY_ALARMS,
+  STORAGE_KEY_NEXT_ID,
+  CAPTCHA_TYPE,
+  DEFAULT_ZOMBIE_STEPS,
+  DEFAULT_ZOMBIE_TIMEOUT_SEC,
+} from './constants'
 
 const storage = new LocalStorage()
+
+/**
+ * @typedef {Object} CaptchaConfig
+ * @property {string} type - 'none' | 'zombie'
+ * @property {number} steps - target steps to walk
+ * @property {number} timeoutSec - grace period before alarm rings again
+ */
 
 /**
  * @typedef {Object} Alarm
@@ -12,11 +25,25 @@ const storage = new LocalStorage()
  * @property {boolean} enabled
  * @property {boolean} smart
  * @property {number} smartWindow - minutes
+ * @property {CaptchaConfig} captcha
  * @property {{ final: number, check: number }} nativeIds - ids returned by @zos/alarm set(), 0 = none
  */
 
+function normalizeAlarm(alarm) {
+  if (!alarm) return alarm
+  if (!alarm.captcha) {
+    alarm.captcha = {
+      type: CAPTCHA_TYPE.ZOMBIE,
+      steps: DEFAULT_ZOMBIE_STEPS,
+      timeoutSec: DEFAULT_ZOMBIE_TIMEOUT_SEC,
+    }
+  }
+  return alarm
+}
+
 export function getAlarms() {
-  return storage.getItem(STORAGE_KEY_ALARMS, [])
+  const list = storage.getItem(STORAGE_KEY_ALARMS, [])
+  return list.map(normalizeAlarm)
 }
 
 export function saveAlarms(alarms) {
@@ -24,10 +51,12 @@ export function saveAlarms(alarms) {
 }
 
 export function getAlarmById(id) {
-  return getAlarms().find((a) => a.id === id)
+  const alarm = getAlarms().find((a) => a.id === id)
+  return normalizeAlarm(alarm)
 }
 
 export function upsertAlarm(alarm) {
+  normalizeAlarm(alarm)
   const alarms = getAlarms()
   const index = alarms.findIndex((a) => a.id === alarm.id)
   if (index >= 0) {
@@ -59,6 +88,11 @@ export function createDraftAlarm() {
     enabled: true,
     smart: false,
     smartWindow: 20,
+    captcha: {
+      type: CAPTCHA_TYPE.ZOMBIE,
+      steps: DEFAULT_ZOMBIE_STEPS,
+      timeoutSec: DEFAULT_ZOMBIE_TIMEOUT_SEC,
+    },
     nativeIds: { final: 0, check: 0 },
   }
 }

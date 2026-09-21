@@ -64,7 +64,24 @@ const [indexPage, editPage, ringPage] = registeredPages
 // the same `def`, so each simulated "launch" must reset ring.page's state
 // by hand to match that real-world fresh-process behavior.
 function freshRingPageState() {
-  ringPage.state = { alarm: null, wake: null, ringing: false, vibrator: null, widgets: [] }
+  ringPage.state = {
+    alarm: null,
+    wake: null,
+    ringing: false,
+    vibrator: null,
+    widgets: [],
+    zombieMode: false,
+    zombieFailed: false,
+    zombieTimerId: null,
+    zombieFallbackAlarmId: null,
+    stepSensor: null,
+    initialSteps: 0,
+    currentSteps: 0,
+    targetSteps: 30,
+    remainingSeconds: 180,
+    stepTextWidget: null,
+    timerTextWidget: null,
+  }
 }
 
 const byText = (text) => uiMock.__mock.created.find((w) => w._opts.text === text)
@@ -144,6 +161,35 @@ console.log('\n3. page/edit.page.js: create a new alarm end to end')
   ok(editPage.state.alarm.smart === true, 'flipping the Smart Wake switch sets alarm.smart')
   ok(byText('Wake window: 20 min before') !== undefined, 'enabling Smart Wake reveals the wake-window row')
 
+  // Open CAPTCHA menu from the settings screen
+  const captchaBtn = uiMock.__mock.created.find(
+    (w) => typeof w._opts.text === 'string' && w._opts.text.startsWith('CAPTCHA:')
+  )
+  ok(captchaBtn !== undefined, 'CAPTCHA settings button is rendered on settings screen')
+  captchaBtn._opts.click_func()
+  ok(editPage.state.mode === 'captcha', 'tapping CAPTCHA button opens CAPTCHA menu')
+  ok(byText('CAPTCHA Menu') !== undefined, 'CAPTCHA Menu title is rendered')
+  ok(byText('None') !== undefined && byText('Zombie Walk') !== undefined, 'None and Zombie Walk options are rendered')
+  ok(byText('30 steps') !== undefined, 'default 30 steps is displayed')
+  ok(byText('+5') !== undefined && byText('-5') !== undefined, '+5 and -5 step buttons are rendered')
+
+  // Test +5 / -5 step increment buttons
+  byText('+5')._opts.click_func()
+  ok(editPage.state.alarm.captcha.steps === 35, '+5 increases steps to 35')
+  byText('-5')._opts.click_func()
+  ok(editPage.state.alarm.captcha.steps === 30, '-5 decreases steps back to 30')
+
+  // Test +30s / -30s timeout buttons
+  ok(byText('+30s') !== undefined && byText('-30s') !== undefined, '+30s and -30s timeout buttons are rendered')
+  byText('+30s')._opts.click_func()
+  ok(editPage.state.alarm.captcha.timeoutSec === 210, '+30s increases timeout to 210s')
+  byText('-30s')._opts.click_func()
+  ok(editPage.state.alarm.captcha.timeoutSec === 180, '-30s decreases timeout back to 180s (3 min)')
+
+  // Tap Done to return to settings
+  byText('Done')._opts.click_func()
+  ok(editPage.state.mode === 'settings', 'Done navigates back to settings')
+
   // Save.
   byText('Save')._opts.click_func()
   ok(routerMock.__mock.calls.some((c) => c.fn === 'back'), 'Save navigates back')
@@ -152,7 +198,14 @@ console.log('\n3. page/edit.page.js: create a new alarm end to end')
   const { getAlarms } = await import('../utils/alarm-store.js')
   const saved = getAlarms()
   ok(saved.length === 1, 'exactly one alarm is persisted')
-  ok(saved[0].hour === 7 && saved[0].minute === 30 && saved[0].smart === true, 'persisted alarm matches what was edited')
+  ok(
+    saved[0].hour === 7 &&
+      saved[0].minute === 30 &&
+      saved[0].smart === true &&
+      saved[0].captcha.type === 'zombie' &&
+      saved[0].captcha.steps === 30,
+    'persisted alarm matches what was edited including CAPTCHA config'
+  )
 }
 
 console.log('\n4. page/index.page.js: non-empty state')
@@ -164,7 +217,7 @@ console.log('\n4. page/index.page.js: non-empty state')
   ok(row !== undefined, 'the saved alarm shows up as a row in the list')
 }
 
-console.log('\n5. page/ring.page.js: alarm fires at the exact time (mode "final")')
+console.log('\n5. page/ring.page.js: alarm fires at exact time and enters Zombie Walk')
 {
   const { getAlarms } = await import('../utils/alarm-store.js')
   const alarm = getAlarms()[0]
@@ -184,15 +237,77 @@ console.log('\n5. page/ring.page.js: alarm fires at the exact time (mode "final"
   ringPage.build()
   ok(byText('Wake up!') !== undefined, 'ringing screen shows the plain wake-up message (not the smart-wake one)')
   ok(byText('Dismiss') !== undefined && byText('Snooze 9m') !== undefined, 'Dismiss and Snooze buttons are rendered')
-  ok(sensorMock.__mock.vibrations.some((v) => v.action === 'start'), 'dismissing starts the vibration motor')
+  ok(sensorMock.__mock.vibrations.some((v) => v.action === 'start'), 'ringing starts the vibration motor')
 
+  // Dismissing with Zombie Walk active transitions into the walk challenge
   byText('Dismiss')._opts.click_func()
   ok(sensorMock.__mock.vibrations.some((v) => v.action === 'stop'), 'Dismiss stops the vibration motor')
-  ok(routerMock.__mock.calls.some((c) => c.fn === 'exit'), 'Dismiss exits the mini-program')
+  ok(ringPage.state.zombieMode === true, 'Dismiss enters Zombie Walk challenge mode')
+  ok(alarmMock.__mock.active.size === 3, 'Zombie Walk arms a fallback timer for timeout failure')
+  ok(byText('ZOMBIE WALK') !== undefined, 'Zombie Walk title is displayed')
+  ok(byText('0 / 30') !== undefined, 'initial 0 / 30 steps is displayed')
+
+  // Simulate walking 30 steps
+  sensorMock.__mock.steps.current = 130 // started at 100, +30 steps
+  ringPage.onStepUpdate()
+  ok(ringPage.state.currentSteps === 30, 'step sensor update reflects 30 steps')
+  ok(alarmMock.__mock.active.size === 2, 'completing steps cancels the fallback alarm')
+  ok(byText('✓ AWAKE!') !== undefined, 'success screen shows AWAKE!')
 
   const rearmed = getAlarms()[0]
   ok(rearmed.enabled === true, 'a repeating alarm stays enabled after ringing')
-  ok(rearmed.nativeIds.final !== finalIdBefore, 'dismissing a repeating alarm re-arms a fresh native timer for its next occurrence')
+  ok(rearmed.nativeIds.final !== finalIdBefore, 'completing Zombie Walk re-arms a fresh native timer for its next occurrence')
+}
+
+console.log('\n5b. page/ring.page.js: Zombie Walk timeout failure triggers loop with current time')
+{
+  const { getAlarms } = await import('../utils/alarm-store.js')
+  const alarm = getAlarms()[0]
+
+  uiMock.__mock.reset()
+  routerMock.__mock.reset()
+  sensorMock.__mock.reset()
+  freshRingPageState()
+
+  appDef.onCreate(JSON.stringify({ id: alarm.id, mode: 'final' }))
+  ringPage.onInit()
+  ringPage.build()
+  byText('Dismiss')._opts.click_func()
+  ok(ringPage.state.zombieMode === true, 'Dismiss enters zombie mode')
+
+  // Simulate time expiring
+  ringPage.state.remainingSeconds = 0
+  ringPage.checkZombieProgress()
+  ok(ringPage.state.zombieMode === false, 'failure exits zombie mode')
+  ok(ringPage.state.zombieFailed === true, 'zombieFailed flag set')
+  ok(
+    sensorMock.__mock.vibrations[sensorMock.__mock.vibrations.length - 1].action === 'start',
+    'alarm resumes ringing with loud vibration'
+  )
+  ok(byText('Walk not finished!\nWake up!') !== undefined, 'failure message is displayed on re-ring screen')
+}
+
+console.log('\n5c. page/ring.page.js: CAPTCHA None directly exits on Dismiss')
+{
+  const { getAlarms, upsertAlarm } = await import('../utils/alarm-store.js')
+  const alarm = getAlarms()[0]
+  alarm.captcha.type = 'none'
+  upsertAlarm(alarm)
+
+  uiMock.__mock.reset()
+  routerMock.__mock.reset()
+  sensorMock.__mock.reset()
+  freshRingPageState()
+
+  appDef.onCreate(JSON.stringify({ id: alarm.id, mode: 'final' }))
+  ringPage.onInit()
+  ringPage.build()
+  byText('Dismiss')._opts.click_func()
+  ok(routerMock.__mock.calls.some((c) => c.fn === 'exit'), 'Dismiss directly exits when CAPTCHA is None')
+
+  // Reset back to zombie for subsequent tests
+  alarm.captcha.type = 'zombie'
+  upsertAlarm(alarm)
 }
 
 console.log('\n6. page/ring.page.js: smart-wake check with no signal re-arms silently')

@@ -16,7 +16,8 @@
     "device:os.alarm",
     "device:os.local_storage",
     "data:os.device.info",
-    "data:user.hd.heart_rate"
+    "data:user.hd.heart_rate",
+    "data:user.hd.step"
   ],
   "runtime": {
     "apiVersion": {
