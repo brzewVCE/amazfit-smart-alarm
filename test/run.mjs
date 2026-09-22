@@ -379,6 +379,34 @@ console.log('\n5c. page/ring.page.js: CAPTCHA None directly exits on Dismiss')
   upsertAlarm(alarm)
 }
 
+console.log('\n5d. page/ring.page.js: Cold-start fallback recovers alarm when wake param is missing')
+{
+  const { getAlarms, upsertAlarm } = await import('../alarm/repository.js')
+  const now = new Date()
+  const alarm = getAlarms()[0]
+  alarm.enabled = true
+  alarm.hour = now.getHours()
+  alarm.minute = now.getMinutes()
+  upsertAlarm(alarm)
+
+  uiMock.__mock.reset()
+  routerMock.__mock.reset()
+  sensorMock.__mock.reset()
+  freshRingPageState()
+
+  // App starts with NO wake params (simulating OS param loss after long deep sleep cold start)
+  currentApp._options.globalData.wakeParams = null
+  ringPage.onInit(null)
+
+  ok(ringPage.state.alarm !== null, 'cold start fallback successfully finds enabled alarm')
+  ok(ringPage.state.alarm.id === alarm.id, 'cold start fallback matched the correct alarm ID')
+  ok(ringPage.state.ringing === true, 'cold start fallback immediately initiates ringing')
+  ok(!calledSafeExit(), 'cold start fallback prevents false-positive early exit')
+
+  ringPage.build()
+  ok(byText('Dismiss') !== undefined, 'ringing screen with Dismiss button is displayed')
+}
+
 console.log('\n6. page/ring.page.js: smart-wake check with no signal re-arms silently')
 {
   const { getAlarms } = await import('../alarm/repository.js')

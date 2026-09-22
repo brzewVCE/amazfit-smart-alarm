@@ -6,9 +6,12 @@ import {
   setPageBrightTime,
   pauseDropWristScreenOff,
   resetDropWristScreenOff,
+  pausePalmScreenOff,
+  resetPalmScreenOff,
 } from '@zos/display'
 import {
   getAlarmById,
+  getAlarms,
   scheduleNextCheck,
   rearmAfterRing,
   snooze,
@@ -36,6 +39,9 @@ function safeExit() {
   } catch (e) {}
   try {
     resetDropWristScreenOff()
+  } catch (e) {}
+  try {
+    resetPalmScreenOff()
   } catch (e) {}
   try {
     if (typeof home === 'function') {
@@ -83,6 +89,33 @@ Page({
         globalData.wakeParams = null // consume so subsequent manual launch starts clean
       } catch (e) {}
     }
+
+    // Fallback for Cold-Start / Deep Sleep param loss:
+    // If woken by @zos/alarm but param was dropped/empty by OS, search for the enabled alarm
+    // closest to the current clock time instead of exiting!
+    if (!wake || !wake.id) {
+      const allAlarms = getAlarms()
+      const now = new Date()
+      const currentMin = now.getHours() * 60 + now.getMinutes()
+      const candidate = allAlarms
+        .filter((a) => a.enabled)
+        .sort((a, b) => {
+          const diffA = Math.min(
+            Math.abs(currentMin - (a.hour * 60 + a.minute)),
+            1440 - Math.abs(currentMin - (a.hour * 60 + a.minute))
+          )
+          const diffB = Math.min(
+            Math.abs(currentMin - (b.hour * 60 + b.minute)),
+            1440 - Math.abs(currentMin - (b.hour * 60 + b.minute))
+          )
+          return diffA - diffB
+        })[0]
+
+      if (candidate) {
+        wake = { id: candidate.id, mode: 'final' }
+      }
+    }
+
     this.state.wake = wake
 
     if (!wake || !wake.id) {
@@ -125,8 +158,9 @@ Page({
 
     // Keep screen on and pause wrist drop screen off while alarm is ringing!
     try {
-      setPageBrightTime({ brightTime: 120000 })
-      pauseDropWristScreenOff({ duration: 120000 })
+      setPageBrightTime({ brightTime: 180000 })
+      pauseDropWristScreenOff({ duration: 180000 })
+      pausePalmScreenOff({ duration: 180000 })
     } catch (e) {}
 
     // Strict Anti-Exit Lock: block physical buttons and swipe gestures during ringing
@@ -197,11 +231,31 @@ Page({
           this.state.vibrator.setMode(VIBRATOR_SCENE_CALL)
         } catch (e) {}
         this.state.vibrator.start()
+
+        // Resilient vibration pulse heartbeat:
+        // Zepp OS audio/haptic hardware may be in low-power standby during initial page init.
+        // Re-issuing start() every 2.5s ensures the motor stays actively vibrating while ringing.
+        if (this._vibratorPulseTimer) {
+          clearInterval(this._vibratorPulseTimer)
+        }
+        this._vibratorPulseTimer = setInterval(() => {
+          if (this.state.ringing && this.state.vibrator) {
+            try {
+              this.state.vibrator.start()
+            } catch (e) {}
+          } else {
+            this.stopVibration()
+          }
+        }, 2500)
       }
     } catch (e) {}
   },
 
   stopVibration() {
+    if (this._vibratorPulseTimer) {
+      clearInterval(this._vibratorPulseTimer)
+      this._vibratorPulseTimer = null
+    }
     if (this.state.vibrator) {
       try {
         this.state.vibrator.stop()
@@ -334,8 +388,9 @@ Page({
 
     // Re-arm screen brightness, pause wrist-drop screen off, and lock exit immediately
     try {
-      setPageBrightTime({ brightTime: 120000 })
-      pauseDropWristScreenOff({ duration: 120000 })
+      setPageBrightTime({ brightTime: 180000 })
+      pauseDropWristScreenOff({ duration: 180000 })
+      pausePalmScreenOff({ duration: 180000 })
     } catch (e) {}
     try {
       lockExit()
@@ -369,6 +424,10 @@ Page({
       clearTimeout(this._exitTimer)
       this._exitTimer = null
     }
+    if (this._vibratorPulseTimer) {
+      clearInterval(this._vibratorPulseTimer)
+      this._vibratorPulseTimer = null
+    }
     try {
       unlockExit()
     } catch (e) {}
@@ -376,6 +435,9 @@ Page({
     this.state.vibrator = null
     try {
       resetDropWristScreenOff()
+    } catch (e) {}
+    try {
+      resetPalmScreenOff()
     } catch (e) {}
     if (this.state.activeStrategy) {
       // Clean up challenge runtime UI and sensors, but keep fallback OS alarm
