@@ -1,3 +1,5 @@
+import { logEvent } from './alarm/diagnostics'
+
 App({
   globalData: {
     // Populated below when the app is woken by a @zos/alarm timer. The
@@ -8,13 +10,23 @@ App({
   },
 
   onCreate(params) {
+    logEvent('APP_CREATE', { params: params || 'empty' })
     if (!params) return
     try {
-      this.globalData.wakeParams = JSON.parse(params)
+      const parsed = typeof params === 'string' ? JSON.parse(params) : params
+      if (this.globalData) {
+        this.globalData.wakeParams = parsed
+      }
+      if (this._options && this._options.globalData) {
+        this._options.globalData.wakeParams = parsed
+      }
     } catch (e) {
-      this.globalData.wakeParams = null
+      if (this.globalData) this.globalData.wakeParams = null
+      if (this._options && this._options.globalData) this._options.globalData.wakeParams = null
     }
   },
 
-  onDestroy() {},
+  onDestroy() {
+    logEvent('APP_DESTROY')
+  },
 })

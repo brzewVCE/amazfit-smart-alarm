@@ -1,6 +1,7 @@
 import { set, cancel } from '@zos/alarm'
 import { SMART_CHECK_INTERVAL_SEC } from './constants'
 import { upsertAlarm } from './repository'
+import { logEvent } from './diagnostics'
 
 const RING_URL = 'page/ring.page'
 
@@ -64,6 +65,7 @@ export function cancelNative(alarm) {
   try {
     cancelIfSet(alarm.nativeIds && alarm.nativeIds.final)
     cancelIfSet(alarm.nativeIds && alarm.nativeIds.check)
+    logEvent('CANCEL_NATIVE', { id: alarm.id, prevFinal: alarm.nativeIds?.final })
     alarm.nativeIds = { final: 0, check: 0 }
   } catch (e) {}
 }
@@ -86,6 +88,14 @@ export function scheduleAlarm(alarm) {
     time: targetTime,
     store: true,
     param: JSON.stringify({ id: alarm.id, mode: 'final' }),
+  })
+
+  logEvent('SCHEDULE', {
+    id: alarm.id,
+    h: alarm.hour,
+    m: alarm.minute,
+    target: targetTime,
+    nativeId: alarm.nativeIds.final,
   })
 
   if (alarm.smart) {
@@ -166,5 +176,6 @@ export function snooze(alarm, minutes) {
     store: true,
     param: JSON.stringify({ id: alarm.id, mode: 'final' }),
   })
+  logEvent('SNOOZE', { id: alarm.id, minutes, nativeId: alarm.nativeIds.final })
   upsertAlarm(alarm)
 }

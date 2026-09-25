@@ -16,6 +16,8 @@ import * as routerMock from '@zos/router'
 import * as alarmMock from '@zos/alarm'
 import * as sensorMock from '@zos/sensor'
 import * as deviceMock from '@zos/device'
+import * as displayMock from '@zos/display'
+import * as settingsMock from '@zos/settings'
 import * as interactionMock from '@zos/interaction'
 import { __resetAllMockStorage } from '@zos/storage'
 import { WidgetTracker } from '../ui/tracker.js'
@@ -34,6 +36,8 @@ function resetAllMocks() {
   alarmMock.__mock.reset()
   sensorMock.__mock.reset()
   deviceMock.__mock.reset()
+  displayMock.__mock.reset()
+  settingsMock.__mock.reset()
   interactionMock.__mock.reset()
   __resetAllMockStorage()
 }
@@ -54,15 +58,16 @@ globalThis.getApp = () => currentApp
 
 resetAllMocks()
 
-// Import order defines registeredPages[0..2]. Must be dynamic (not static
+// Import order defines registeredPages[0..3]. Must be dynamic (not static
 // top-level import) so it runs *after* the globals above are installed.
 await import('../app.js')
 await import('../page/index.page.js')
 await import('../page/edit.page.js')
 await import('../page/ring.page.js')
+await import('../page/diag.page.js')
 
 const appDef = currentApp._def
-const [indexPage, editPage, ringPage] = registeredPages
+const [indexPage, editPage, ringPage, diagPage] = registeredPages
 
 // Helpers to search what the mock UI has rendered:
 const byType = (type) => uiMock.__mock.created.find((w) => w._type === type)
@@ -654,6 +659,84 @@ console.log('\n12. utils/anti-exit.js: Strict Lock hardware button and gesture i
   ok(!isExitLocked(), 'unlockExit resets isExitLocked to false')
   ok(interactionMock.__mock.calls.some((c) => c.fn === 'offKey'), 'unlockExit invokes offKey')
   ok(interactionMock.__mock.calls.some((c) => c.fn === 'offGesture'), 'unlockExit invokes offGesture')
+}
+
+console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_TIMER, Blackbox logs & Diag page')
+{
+  resetAllMocks()
+  freshRingPageState()
+
+  // 13a. Verify setWakeUpRelaunch is armed during onInit and build
+  const { getAlarms, upsertAlarm } = await import('../alarm/repository.js')
+  const { createDraftAlarm } = await import('../alarm/model.js')
+  const alarm = createDraftAlarm()
+  alarm.id = 1
+  alarm.enabled = true
+  alarm.captcha = { type: 'none' }
+  upsertAlarm(alarm)
+
+  currentApp._options.globalData.wakeParams = { id: alarm.id, mode: 'final' }
+  ringPage.onInit(null)
+  ok(displayMock.__mock.wakeUpRelaunch === true, 'setWakeUpRelaunch armed on ringPage onInit')
+
+  ringPage.build()
+  ok(displayMock.__mock.wakeUpRelaunch === true, 'setWakeUpRelaunch remains armed after build')
+
+  // 13b. Verify VIBRATOR_SCENE_TIMER used
+  ok(
+    sensorMock.__mock.vibrations.some(
+      (v) => v.mode === sensorMock.VIBRATOR_SCENE_TIMER && v.action === 'start'
+    ),
+    'vibrator started with VIBRATOR_SCENE_TIMER'
+  )
+
+  // 13c. Verify safeExit resets wakeUpRelaunch
+  const dismissBtn = byText('Dismiss')
+  dismissBtn._opts.click_func()
+  ok(displayMock.__mock.wakeUpRelaunch === false, 'setWakeUpRelaunch is cleanly reset to false on dismiss/exit')
+
+  // 13d. Verify diagnostics logs
+  const { getLogs } = await import('../alarm/diagnostics.js')
+  const logs = getLogs()
+  ok(logs.length > 0, 'diagnostics logs recorded during alarm lifecycle')
+  ok(logs.some((l) => l.tag === 'RING_INIT'), 'RING_INIT event recorded in diagnostics')
+  ok(logs.some((l) => l.tag === 'VIBRATE_START'), 'VIBRATE_START event recorded in diagnostics')
+
+  // 13e. Diag page renders properly
+  uiMock.__mock.reset()
+  diagPage.build()
+  ok(byText('Diagnostyka Budzika') !== undefined, 'diag.page.js renders title')
+  ok(byText('Test Wibracji') !== undefined, 'diag.page.js renders vibration test button')
+  ok(byText('Wyczyść logi') !== undefined, 'diag.page.js renders clear logs button')
+
+  // Test vibration button triggers vibrator with VIBRATOR_SCENE_TIMER
+  sensorMock.__mock.reset()
+  const testVibBtn = byText('Test Wibracji')
+  testVibBtn._opts.click_func()
+  ok(
+    sensorMock.__mock.vibrations.some(
+      (v) => v.mode === sensorMock.VIBRATOR_SCENE_TIMER && v.action === 'start'
+    ),
+    'diag page test button starts VIBRATOR_SCENE_TIMER'
+  )
+
+  // Clear logs button empties the list
+  const clearLogsBtn = byText('Wyczyść logi')
+  clearLogsBtn._opts.click_func()
+  ok(getLogs().length === 0, 'clear logs button successfully empties log store')
+
+  // Diag button on index page
+  uiMock.__mock.reset()
+  indexPage.build()
+  const diagBtn = byText('Diag')
+  ok(diagBtn !== undefined, 'index.page.js displays Diag button in header')
+  diagBtn._opts.click_func()
+  ok(
+    routerMock.__mock.calls.some(
+      (c) => c.fn === 'push' && c.opts && c.opts.url === 'page/diag.page'
+    ),
+    'Diag button navigates to page/diag.page'
+  )
 }
 
 console.log(`\nALL ${passCount} CHECKS PASSED`)

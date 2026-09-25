@@ -35,7 +35,8 @@
           "pages": [
             "page/index.page",
             "page/edit.page",
-            "page/ring.page"
+            "page/ring.page",
+            "page/diag.page"
           ]
         }
       },
@@ -53,7 +54,8 @@
           "pages": [
             "page/index.page",
             "page/edit.page",
-            "page/ring.page"
+            "page/ring.page",
+            "page/diag.page"
           ]
         }
       },
@@ -71,7 +73,8 @@
           "pages": [
             "page/index.page",
             "page/edit.page",
-            "page/ring.page"
+            "page/ring.page",
+            "page/diag.page"
           ]
         }
       },
@@ -93,7 +96,8 @@
           "pages": [
             "page/index.page",
             "page/edit.page",
-            "page/ring.page"
+            "page/ring.page",
+            "page/diag.page"
           ]
         }
       },
@@ -127,7 +131,8 @@
           "pages": [
             "page/index.page",
             "page/edit.page",
-            "page/ring.page"
+            "page/ring.page",
+            "page/diag.page"
           ]
         }
       },

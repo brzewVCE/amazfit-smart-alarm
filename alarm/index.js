@@ -34,3 +34,10 @@ export {
 } from './scheduler'
 
 export { checkForWakeSignal } from './smart-wake'
+
+export {
+  logEvent,
+  getLogs,
+  clearLogs,
+  getSystemDiagnosticInfo,
+} from './diagnostics'

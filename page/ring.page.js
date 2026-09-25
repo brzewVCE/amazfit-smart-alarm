@@ -1,6 +1,6 @@
 import { exit, home, back } from '@zos/router'
 import { px } from '@zos/utils'
-import { Vibrator, VIBRATOR_SCENE_CALL } from '@zos/sensor'
+import { Vibrator, VIBRATOR_SCENE_TIMER, VIBRATOR_SCENE_CALL } from '@zos/sensor'
 import { set as setNativeAlarm, cancel as cancelNativeAlarm } from '@zos/alarm'
 import {
   setPageBrightTime,
@@ -8,6 +8,7 @@ import {
   resetDropWristScreenOff,
   pausePalmScreenOff,
   resetPalmScreenOff,
+  setWakeUpRelaunch,
 } from '@zos/display'
 import {
   getAlarmById,
@@ -18,6 +19,7 @@ import {
   checkForWakeSignal,
   SNOOZE_MINUTES,
   DEFAULT_SNOOZE_MINUTES,
+  logEvent,
 } from '../alarm'
 import { COLOR, formatTime, WidgetTracker, getSkin } from '../ui'
 import { getCaptcha } from '../captcha'
@@ -43,6 +45,12 @@ function safeExit() {
   try {
     resetPalmScreenOff()
   } catch (e) {}
+  try {
+    if (typeof setWakeUpRelaunch === 'function') {
+      setWakeUpRelaunch({ relaunch: false })
+    }
+  } catch (e) {}
+  logEvent('SAFE_EXIT')
   try {
     if (typeof home === 'function') {
       home()
@@ -118,7 +126,13 @@ Page({
 
     this.state.wake = wake
 
+    logEvent('RING_INIT', {
+      wake: wake ? { id: wake.id, mode: wake.mode } : null,
+      clock: getCurrentClockTime(),
+    })
+
     if (!wake || !wake.id) {
+      logEvent('RING_EXIT_NO_WAKE')
       safeExit()
       return
     }
@@ -127,16 +141,26 @@ Page({
     this.state.alarm = alarm
 
     if (!alarm || !alarm.enabled) {
+      logEvent('RING_EXIT_NOT_ENABLED', { id: wake.id })
       safeExit()
       return
     }
 
+    // Arm anti-death watchdog: keep app relaunching if screen was turned off
+    try {
+      if (typeof setWakeUpRelaunch === 'function') {
+        setWakeUpRelaunch({ relaunch: true })
+      }
+    } catch (e) {}
+
     if (wake.mode === 'smart-check') {
       if (checkForWakeSignal()) {
+        logEvent('SMART_WAKE_TRIGGER', { id: alarm.id })
         this.state.ringing = true
       } else {
         const remaining = (wake.checksRemaining || 1) - 1
         const nowSec = Math.floor(Date.now() / 1000)
+        logEvent('SMART_CHECK_SILENT', { id: alarm.id, remaining })
         if (remaining > 0 && nowSec < wake.finalTime) {
           scheduleNextCheck(alarm, remaining, wake.finalTime)
         }
@@ -144,9 +168,11 @@ Page({
       }
     } else if (wake.mode === 'captcha-fail') {
       // Re-woken by OS fallback timer because user did not complete challenge in time
+      logEvent('CAPTCHA_FAIL_LOOP', { id: alarm.id })
       this.state.captchaFailed = true
       this.state.ringing = true
     } else {
+      logEvent('RING_ARMED', { id: alarm.id, h: alarm.hour, m: alarm.minute })
       this.state.ringing = true
     }
   },
@@ -161,6 +187,9 @@ Page({
       setPageBrightTime({ brightTime: 180000 })
       pauseDropWristScreenOff({ duration: 180000 })
       pausePalmScreenOff({ duration: 180000 })
+      if (typeof setWakeUpRelaunch === 'function') {
+        setWakeUpRelaunch({ relaunch: true })
+      }
     } catch (e) {}
 
     // Strict Anti-Exit Lock: block physical buttons and swipe gestures during ringing
@@ -192,6 +221,7 @@ Page({
     }
     this._autoSnoozeTimer = setTimeout(() => {
       if (this.state.ringing) {
+        logEvent('AUTO_SNOOZE', { id: this.state.alarm?.id })
         if (snoozeEnabled) {
           this.onSnooze()
         } else {
@@ -227,26 +257,42 @@ Page({
         this.state.vibrator = new Vibrator()
       }
       if (this.state.vibrator) {
+        const scene = VIBRATOR_SCENE_TIMER || VIBRATOR_SCENE_CALL
         try {
-          this.state.vibrator.setMode(VIBRATOR_SCENE_CALL)
-        } catch (e) {}
-        this.state.vibrator.start()
+          this.state.vibrator.setMode({ mode: scene })
+        } catch (e) {
+          try {
+            this.state.vibrator.setMode(scene)
+          } catch (e2) {}
+        }
+        try {
+          this.state.vibrator.start({ mode: scene })
+        } catch (e) {
+          try {
+            this.state.vibrator.start()
+          } catch (e2) {}
+        }
+        logEvent('VIBRATE_START', { scene: 'TIMER' })
 
         // Resilient vibration pulse heartbeat:
         // Zepp OS audio/haptic hardware may be in low-power standby during initial page init.
-        // Re-issuing start() every 2.5s ensures the motor stays actively vibrating while ringing.
+        // Re-issuing start({ mode: VIBRATOR_SCENE_TIMER }) every 2s ensures the motor stays actively vibrating while ringing.
         if (this._vibratorPulseTimer) {
           clearInterval(this._vibratorPulseTimer)
         }
         this._vibratorPulseTimer = setInterval(() => {
           if (this.state.ringing && this.state.vibrator) {
             try {
-              this.state.vibrator.start()
-            } catch (e) {}
+              this.state.vibrator.start({ mode: scene })
+            } catch (e) {
+              try {
+                this.state.vibrator.start()
+              } catch (e2) {}
+            }
           } else {
             this.stopVibration()
           }
-        }, 2500)
+        }, 2000)
       }
     } catch (e) {}
   },
@@ -412,6 +458,7 @@ Page({
   },
 
   onDestroy() {
+    logEvent('RING_DESTROY')
     if (this._autoSnoozeTimer) {
       clearTimeout(this._autoSnoozeTimer)
       this._autoSnoozeTimer = null
@@ -438,6 +485,11 @@ Page({
     } catch (e) {}
     try {
       resetPalmScreenOff()
+    } catch (e) {}
+    try {
+      if (typeof setWakeUpRelaunch === 'function') {
+        setWakeUpRelaunch({ relaunch: false })
+      }
     } catch (e) {}
     if (this.state.activeStrategy) {
       // Clean up challenge runtime UI and sensors, but keep fallback OS alarm

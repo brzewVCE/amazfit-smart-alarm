@@ -37,7 +37,7 @@ Page({
       createWidget(widget.TEXT, {
         x: px(24),
         y: px(20),
-        w: px(384),
+        w: px(260),
         h: px(50),
         text: 'Smart Alarm',
         text_size: px(34),
@@ -45,6 +45,25 @@ Page({
         align_h: align.LEFT,
         align_v: align.CENTER_V,
         text_style: text_style.NONE,
+      })
+    )
+
+    // Diagnostics entry button in header
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(296),
+        y: px(24),
+        w: px(112),
+        h: px(40),
+        radius: px(20),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: 'Diag',
+        text_size: px(18),
+        color: COLOR.primary,
+        click_func: () => {
+          push({ url: 'page/diag.page' })
+        },
       })
     )
 

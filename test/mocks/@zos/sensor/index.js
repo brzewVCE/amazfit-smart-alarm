@@ -20,12 +20,13 @@ export class HeartRate {
 }
 
 export class Vibrator {
-  setMode(mode) {
-    this._mode = mode
+  setMode(modeOrOption) {
+    this._mode = typeof modeOrOption === 'object' && modeOrOption !== null ? modeOrOption.mode : modeOrOption
   }
 
-  start() {
-    __mock.vibrations.push({ mode: this._mode, action: 'start' })
+  start(option) {
+    const mode = option && typeof option === 'object' && option.mode ? option.mode : this._mode
+    __mock.vibrations.push({ mode, action: 'start' })
   }
 
   stop() {
@@ -56,4 +57,5 @@ export class Step {
 }
 
 export const VIBRATOR_SCENE_CALL = 'VIBRATOR_SCENE_CALL'
+export const VIBRATOR_SCENE_TIMER = 'VIBRATOR_SCENE_TIMER'
 
