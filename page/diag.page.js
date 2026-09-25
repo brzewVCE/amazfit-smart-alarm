@@ -1,9 +1,17 @@
 import { createWidget, widget, align, text_style } from '@zos/ui'
 import { back } from '@zos/router'
 import { px } from '@zos/utils'
+import { getDeviceInfo } from '@zos/device'
 import { Vibrator, VIBRATOR_SCENE_TIMER } from '@zos/sensor'
-import { getLogs, clearLogs, getSystemDiagnosticInfo } from '../alarm'
-import { COLOR, WidgetTracker } from '../ui'
+import {
+  getLogs,
+  clearLogs,
+  getSystemDiagnosticInfo,
+  APP_VERSION,
+  APP_BUILD_CODE,
+  APP_BUILD_DATE,
+} from '../alarm'
+import { COLOR, WidgetTracker, isRoundScreen } from '../ui'
 
 Page({
   state: {
@@ -33,19 +41,23 @@ Page({
 
     const sys = getSystemDiagnosticInfo()
     const logs = getLogs()
+    let dev = { width: 390, height: 450 }
+    try {
+      dev = getDeviceInfo() || dev
+    } catch (e) {}
 
-    // Back Button
+    // Back Button (top left)
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(24),
-        y: px(16),
-        w: px(110),
-        h: px(40),
-        radius: px(20),
+        x: px(16),
+        y: px(14),
+        w: px(100),
+        h: px(38),
+        radius: px(19),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: '< Wróć',
-        text_size: px(20),
+        text_size: px(18),
         color: COLOR.textDim,
         click_func: () => {
           back()
@@ -56,53 +68,71 @@ Page({
     // Title
     this.track(
       createWidget(widget.TEXT, {
-        x: px(24),
-        y: px(62),
-        w: px(384),
-        h: px(36),
-        text: 'Diagnostyka Budzika',
-        text_size: px(28),
+        x: px(16),
+        y: px(56),
+        w: px(358),
+        h: px(34),
+        text: 'Dev Menu & Logi',
+        text_size: px(26),
         color: COLOR.primary,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
       })
     )
 
-    // System status banner
+    // Version & Device Info Banner
+    const roundLabel = isRoundScreen() ? 'Round' : 'Square'
+    const verText = `Wersja: v${APP_VERSION} (b${APP_BUILD_CODE}) | ${APP_BUILD_DATE}\nEkran: ${dev.width || 390}x${dev.height || 450} (${roundLabel})`
+    this.track(
+      createWidget(widget.TEXT, {
+        x: px(16),
+        y: px(94),
+        w: px(358),
+        h: px(44),
+        text: verText,
+        text_size: px(16),
+        color: COLOR.text,
+        align_h: align.LEFT,
+        align_v: align.TOP,
+      })
+    )
+
+    // System Status Banner (DND / Sleep / Timers)
     let statusText = ''
     if (sys.mode.available) {
-      statusText += `DND: ${sys.mode.dnd ? 'WŁ (!) ' : 'WYŁ '} | Sen: ${sys.mode.sleep ? 'WŁ (!) ' : 'WYŁ '}\n`
+      statusText += `DND: ${sys.mode.dnd ? 'WŁ (!)' : 'WYŁ'} | Sen: ${sys.mode.sleep ? 'WŁ (!)' : 'WYŁ'}\n`
     } else {
-      statusText += `Tryb snu/DND: [Brak API 3.0]\n`
+      statusText += `Tryb snu/DND: [Standard API]\n`
     }
     statusText += `Timery Zepp OS: ${sys.osAlarmIds.length} [${sys.osAlarmIds.join(', ') || 'brak'}]`
 
     this.track(
       createWidget(widget.TEXT, {
-        x: px(24),
-        y: px(104),
-        w: px(384),
-        h: px(54),
+        x: px(16),
+        y: px(142),
+        w: px(358),
+        h: px(44),
         text: statusText,
-        text_size: px(18),
+        text_size: px(16),
         color: sys.mode.dnd || sys.mode.sleep ? COLOR.danger : COLOR.textDim,
         align_h: align.LEFT,
         align_v: align.TOP,
       })
     )
 
-    // Vibrate Test Button
+    // Buttons side-by-side (fitting 390px safely)
+    // Test Vibrator
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(24),
-        y: px(164),
-        w: px(200),
-        h: px(44),
-        radius: px(22),
+        x: px(16),
+        y: px(192),
+        w: px(174),
+        h: px(42),
+        radius: px(21),
         normal_color: COLOR.primaryDim,
         press_color: COLOR.primary,
-        text: 'Test Wibracji (3s)',
-        text_size: px(20),
+        text: 'Test Wibracji',
+        text_size: px(18),
         color: COLOR.text,
         click_func: () => {
           this.runVibrationTest()
@@ -110,18 +140,18 @@ Page({
       })
     )
 
-    // Clear Logs Button
+    // Clear Logs
     this.track(
       createWidget(widget.BUTTON, {
-        x: px(234),
-        y: px(164),
-        w: px(174),
-        h: px(44),
-        radius: px(22),
+        x: px(198),
+        y: px(192),
+        w: px(176),
+        h: px(42),
+        radius: px(21),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: 'Wyczyść logi',
-        text_size: px(18),
+        text_size: px(17),
         color: COLOR.textDim,
         click_func: () => {
           clearLogs()
@@ -133,20 +163,20 @@ Page({
     // Recent Logs Header
     this.track(
       createWidget(widget.TEXT, {
-        x: px(24),
-        y: px(218),
-        w: px(384),
+        x: px(16),
+        y: px(242),
+        w: px(358),
         h: px(26),
         text: `Ostatnie zdarzenia (${logs.length}):`,
-        text_size: px(20),
+        text_size: px(19),
         color: COLOR.text,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
       })
     )
 
-    // Logs content (last 12 entries reversed)
-    const recent = logs.slice(-12).reverse()
+    // Logs content (last 15 entries reversed)
+    const recent = logs.slice(-15).reverse()
     let logLines = ''
     if (recent.length === 0) {
       logLines = 'Brak zarejestrowanych zdarzeń.\nUstaw budzik, by sprawdzić logi.'
@@ -158,12 +188,12 @@ Page({
 
     this.track(
       createWidget(widget.TEXT, {
-        x: px(24),
-        y: px(248),
-        w: px(384),
-        h: px(240),
+        x: px(16),
+        y: px(272),
+        w: px(358),
+        h: px(200),
         text: logLines,
-        text_size: px(15),
+        text_size: px(14),
         color: COLOR.textDim,
         align_h: align.LEFT,
         align_v: align.TOP,

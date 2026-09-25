@@ -2,6 +2,7 @@
 """
 Gadgetbridge QR Installer for Amazfit Smart Alarm
 Extracts individual .zpk and direct .zip packages from .zab and serves them over LAN.
+Includes no-cache headers and dynamic packaging to ensure the watch always receives latest code.
 """
 
 import argparse
@@ -19,6 +20,17 @@ import zipfile
 from datetime import datetime
 
 PORT_DEFAULT = 8080
+
+def get_app_version(repo_root):
+    try:
+        app_json_path = os.path.join(repo_root, "app.json")
+        if os.path.exists(app_json_path):
+            with open(app_json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("app", {}).get("version", {}).get("name", "1.2.0")
+    except Exception:
+        pass
+    return "1.2.0"
 
 def get_lan_ip(override_ip=None):
     """
@@ -82,11 +94,15 @@ def print_qr(url):
         print(f"\n[!] Unable to display QR code automatically.")
         print(f"    Open this URL on your phone: {url}\n")
 
-def unpack_packages(dist_dir):
+def unpack_packages(dist_dir, repo_root=None):
     """
     Extracts individual .zpk and direct .zip packages from the newest .zab bundle.
     Gadgetbridge cannot install .zab multi-bundles; it requires individual .zpk or direct app zips.
     """
+    if repo_root is None:
+        repo_root = os.path.abspath(os.path.join(dist_dir, ".."))
+
+    ver = get_app_version(repo_root)
     zab_files = glob.glob(os.path.join(dist_dir, "*.zab"))
     if not zab_files:
         return {}
@@ -99,7 +115,6 @@ def unpack_packages(dist_dir):
         manifest = {}
         if "manifest.json" in z.namelist():
             try:
-                import json
                 manifest = json.loads(z.read("manifest.json").decode("utf-8"))
             except Exception:
                 manifest = {}
@@ -132,20 +147,28 @@ def unpack_packages(dist_dir):
             is_round = stype == "round" or res == "466x466"
 
             if is_square_390 and "square" not in packages:
-                zpk_name = "Smart_Alarm-Active2_Square.zpk"
-                direct_name = "Smart_Alarm-Active2_Square-direct.zip"
+                zpk_name = f"Smart_Alarm-v{ver}-Active2_Square.zpk"
+                direct_name = f"Smart_Alarm-v{ver}-Active2_Square-direct.zip"
+                legacy_zpk = "Smart_Alarm-Active2_Square.zpk"
+                legacy_dir = "Smart_Alarm-Active2_Square-direct.zip"
                 target_key = "square"
             elif is_round and "round" not in packages:
-                zpk_name = "Smart_Alarm-Active2_Round.zpk"
-                direct_name = "Smart_Alarm-Active2_Round-direct.zip"
+                zpk_name = f"Smart_Alarm-v{ver}-Active2_Round.zpk"
+                direct_name = f"Smart_Alarm-v{ver}-Active2_Round-direct.zip"
+                legacy_zpk = "Smart_Alarm-Active2_Round.zpk"
+                legacy_dir = "Smart_Alarm-Active2_Round-direct.zip"
                 target_key = "round"
             elif is_square_432 and "bip" not in packages:
-                zpk_name = "Smart_Alarm-BipMax_Square.zpk"
-                direct_name = "Smart_Alarm-BipMax_Square-direct.zip"
+                zpk_name = f"Smart_Alarm-v{ver}-BipMax_Square.zpk"
+                direct_name = f"Smart_Alarm-v{ver}-BipMax_Square-direct.zip"
+                legacy_zpk = "Smart_Alarm-BipMax_Square.zpk"
+                legacy_dir = "Smart_Alarm-BipMax_Square-direct.zip"
                 target_key = "bip"
             elif (stype == "square" or "rome" in name) and "square" not in packages:
-                zpk_name = "Smart_Alarm-Active2_Square.zpk"
-                direct_name = "Smart_Alarm-Active2_Square-direct.zip"
+                zpk_name = f"Smart_Alarm-v{ver}-Active2_Square.zpk"
+                direct_name = f"Smart_Alarm-v{ver}-Active2_Square-direct.zip"
+                legacy_zpk = "Smart_Alarm-Active2_Square.zpk"
+                legacy_dir = "Smart_Alarm-Active2_Square-direct.zip"
                 target_key = "square"
             else:
                 continue
@@ -153,14 +176,20 @@ def unpack_packages(dist_dir):
             zpk_path = os.path.join(dist_dir, zpk_name)
             with open(zpk_path, "wb") as f:
                 f.write(content)
+            # Legacy alias
+            with open(os.path.join(dist_dir, legacy_zpk), "wb") as f:
+                f.write(content)
 
             # Extract the inner device.zip as direct zip (contains app.json in root)
             direct_path = os.path.join(dist_dir, direct_name)
             try:
                 with zipfile.ZipFile(zpk_path, "r") as zpk_inner:
                     if "device.zip" in zpk_inner.namelist():
+                        d_bytes = zpk_inner.read("device.zip")
                         with open(direct_path, "wb") as f_dir:
-                            f_dir.write(zpk_inner.read("device.zip"))
+                            f_dir.write(d_bytes)
+                        with open(os.path.join(dist_dir, legacy_dir), "wb") as f_dir:
+                            f_dir.write(d_bytes)
             except Exception:
                 pass
 
@@ -178,7 +207,6 @@ def unpack_packages(dist_dir):
             primary_key = "square" if "square" in packages else list(packages.keys())[0]
             primary_pkg = packages[primary_key]
             try:
-                repo_root = os.path.abspath(os.path.join(dist_dir, ".."))
                 app_json_path = os.path.join(repo_root, "app.json")
                 all_platforms = []
                 seen_sources = set()
@@ -209,17 +237,23 @@ def unpack_packages(dist_dir):
                                 d_out.writestr(item, c)
                         new_device_zip = d_out_buf.getvalue()
 
-                    univ_direct_name = "Smart_Alarm-Universal-direct.zip"
+                    univ_direct_name = f"Smart_Alarm-v{ver}-Universal-direct.zip"
                     univ_direct_path = os.path.join(dist_dir, univ_direct_name)
                     with open(univ_direct_path, "wb") as f:
                         f.write(new_device_zip)
+                    with open(os.path.join(dist_dir, "Smart_Alarm-Universal-direct.zip"), "wb") as f:
+                        f.write(new_device_zip)
 
-                    univ_zpk_name = "Smart_Alarm-Universal.zpk"
+                    univ_zpk_name = f"Smart_Alarm-v{ver}-Universal.zpk"
                     univ_zpk_path = os.path.join(dist_dir, univ_zpk_name)
                     with zipfile.ZipFile(univ_zpk_path, "w", compression=zipfile.ZIP_DEFLATED) as u_out:
                         u_out.writestr("device.zip", new_device_zip)
                         if app_side_bytes:
                             u_out.writestr("app-side.zip", app_side_bytes)
+
+                    with open(os.path.join(dist_dir, "Smart_Alarm-Universal.zpk"), "wb") as f:
+                        with open(univ_zpk_path, "rb") as sf:
+                            f.write(sf.read())
 
                     packages["universal"] = {
                         "zpk_name": univ_zpk_name,
@@ -242,50 +276,7 @@ def render_html_template(template_path, context):
         html = html.replace(f"{{{{ {key} }}}}", str(val))
     return html.encode("utf-8")
 
-def create_handler(packages, template_path):
-    # Route mapping: path -> (filepath, download_filename, content_type)
-    DOWNLOAD_ROUTES = {}
-
-    if "universal" in packages:
-        un = packages["universal"]
-        DOWNLOAD_ROUTES["/download/universal-zpk"] = (un["zpk_path"], un["zpk_name"], "application/octet-stream")
-        DOWNLOAD_ROUTES["/download/universal-zip"] = (un["direct_path"], un["direct_name"], "application/zip")
-
-    if "square" in packages:
-        sq = packages["square"]
-        DOWNLOAD_ROUTES["/download/square-zpk"] = (sq["zpk_path"], sq["zpk_name"], "application/octet-stream")
-        DOWNLOAD_ROUTES["/download/square-zip"] = (sq["direct_path"], sq["direct_name"], "application/zip")
-
-    if "round" in packages:
-        rd = packages["round"]
-        DOWNLOAD_ROUTES["/download/round-zpk"] = (rd["zpk_path"], rd["zpk_name"], "application/octet-stream")
-        DOWNLOAD_ROUTES["/download/round-zip"] = (rd["direct_path"], rd["direct_name"], "application/zip")
-
-    if "bip" in packages:
-        bp = packages["bip"]
-        DOWNLOAD_ROUTES["/download/bip-zpk"] = (bp["zpk_path"], bp["zpk_name"], "application/octet-stream")
-        DOWNLOAD_ROUTES["/download/bip-zip"] = (bp["direct_path"], bp["direct_name"], "application/zip")
-
-    context = {
-        "universal_zpk_name": packages.get("universal", {}).get("zpk_name", "Smart_Alarm-Universal.zpk"),
-        "universal_zpk_size": packages.get("universal", {}).get("zpk_size_kb", "31.0"),
-        "universal_direct_name": packages.get("universal", {}).get("direct_name", "Smart_Alarm-Universal-direct.zip"),
-        "universal_direct_size": packages.get("universal", {}).get("direct_size_kb", "31.0"),
-        "square_zpk_name": packages.get("square", {}).get("zpk_name", "Smart_Alarm-Active2_Square.zpk"),
-        "square_zpk_size": packages.get("square", {}).get("zpk_size_kb", "15.0"),
-        "square_direct_name": packages.get("square", {}).get("direct_name", "Smart_Alarm-Active2_Square-direct.zip"),
-        "square_direct_size": packages.get("square", {}).get("direct_size_kb", "15.0"),
-        "round_zpk_name": packages.get("round", {}).get("zpk_name", "Smart_Alarm-Active2_Round.zpk"),
-        "round_zpk_size": packages.get("round", {}).get("zpk_size_kb", "15.0"),
-        "round_direct_name": packages.get("round", {}).get("direct_name", "Smart_Alarm-Active2_Round-direct.zip"),
-        "round_direct_size": packages.get("round", {}).get("direct_size_kb", "15.0"),
-        "bip_zpk_name": packages.get("bip", {}).get("zpk_name", "Smart_Alarm-BipMax_Square.zpk"),
-        "bip_zpk_size": packages.get("bip", {}).get("zpk_size_kb", "15.0"),
-        "bip_direct_name": packages.get("bip", {}).get("direct_name", "Smart_Alarm-BipMax_Square-direct.zip"),
-        "bip_direct_size": packages.get("bip", {}).get("direct_size_kb", "15.0"),
-    }
-    html_content = render_html_template(template_path, context)
-
+def create_handler(repo_root, dist_dir, template_path):
     class InstallerHTTPHandler(http.server.BaseHTTPRequestHandler):
         def log_message(self, format, *args):
             sys.stderr.write(f"[{datetime.now().strftime('%H:%M:%S')}] {args[0]} - {args[1]}\n")
@@ -294,17 +285,63 @@ def create_handler(packages, template_path):
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(length))
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             if attachment:
                 self.send_header("Content-Disposition", f'attachment; filename="{attachment}"')
             self.end_headers()
 
         def handle_request(self, send_body=True):
             path = urllib.parse.urlparse(self.path).path
+            packages = unpack_packages(dist_dir, repo_root)
+            ver = get_app_version(repo_root)
+
+            DOWNLOAD_ROUTES = {}
+            if "universal" in packages:
+                un = packages["universal"]
+                DOWNLOAD_ROUTES["/download/universal-zpk"] = (un["zpk_path"], un["zpk_name"], "application/octet-stream")
+                DOWNLOAD_ROUTES["/download/universal-zip"] = (un["direct_path"], un["direct_name"], "application/zip")
+
+            if "square" in packages:
+                sq = packages["square"]
+                DOWNLOAD_ROUTES["/download/square-zpk"] = (sq["zpk_path"], sq["zpk_name"], "application/octet-stream")
+                DOWNLOAD_ROUTES["/download/square-zip"] = (sq["direct_path"], sq["direct_name"], "application/zip")
+
+            if "round" in packages:
+                rd = packages["round"]
+                DOWNLOAD_ROUTES["/download/round-zpk"] = (rd["zpk_path"], rd["zpk_name"], "application/octet-stream")
+                DOWNLOAD_ROUTES["/download/round-zip"] = (rd["direct_path"], rd["direct_name"], "application/zip")
+
+            if "bip" in packages:
+                bp = packages["bip"]
+                DOWNLOAD_ROUTES["/download/bip-zpk"] = (bp["zpk_path"], bp["zpk_name"], "application/octet-stream")
+                DOWNLOAD_ROUTES["/download/bip-zip"] = (bp["direct_path"], bp["direct_name"], "application/zip")
 
             if path in ("/", "/index.html"):
-                self.send_headers(200, "text/html; charset=utf-8", len(html_content))
+                context = {
+                    "app_version": ver,
+                    "universal_zpk_name": packages.get("universal", {}).get("zpk_name", f"Smart_Alarm-v{ver}-Universal.zpk"),
+                    "universal_zpk_size": packages.get("universal", {}).get("zpk_size_kb", "42.0"),
+                    "universal_direct_name": packages.get("universal", {}).get("direct_name", f"Smart_Alarm-v{ver}-Universal-direct.zip"),
+                    "universal_direct_size": packages.get("universal", {}).get("direct_size_kb", "42.0"),
+                    "square_zpk_name": packages.get("square", {}).get("zpk_name", f"Smart_Alarm-v{ver}-Active2_Square.zpk"),
+                    "square_zpk_size": packages.get("square", {}).get("zpk_size_kb", "42.0"),
+                    "square_direct_name": packages.get("square", {}).get("direct_name", f"Smart_Alarm-v{ver}-Active2_Square-direct.zip"),
+                    "square_direct_size": packages.get("square", {}).get("direct_size_kb", "42.0"),
+                    "round_zpk_name": packages.get("round", {}).get("zpk_name", f"Smart_Alarm-v{ver}-Active2_Round.zpk"),
+                    "round_zpk_size": packages.get("round", {}).get("zpk_size_kb", "42.0"),
+                    "round_direct_name": packages.get("round", {}).get("direct_name", f"Smart_Alarm-v{ver}-Active2_Round-direct.zip"),
+                    "round_direct_size": packages.get("round", {}).get("direct_size_kb", "42.0"),
+                    "bip_zpk_name": packages.get("bip", {}).get("zpk_name", f"Smart_Alarm-v{ver}-BipMax_Square.zpk"),
+                    "bip_zpk_size": packages.get("bip", {}).get("zpk_size_kb", "42.0"),
+                    "bip_direct_name": packages.get("bip", {}).get("direct_name", f"Smart_Alarm-v{ver}-BipMax_Square-direct.zip"),
+                    "bip_direct_size": packages.get("bip", {}).get("direct_size_kb", "42.0"),
+                }
+                html_bytes = render_html_template(template_path, context)
+                self.send_headers(200, "text/html; charset=utf-8", len(html_bytes))
                 if send_body:
-                    self.wfile.write(html_content)
+                    self.wfile.write(html_bytes)
                 return
 
             if path in DOWNLOAD_ROUTES:
@@ -346,7 +383,7 @@ def main():
     dist_dir = os.path.join(repo_root, "dist")
     template_path = os.path.join(os.path.dirname(__file__), "templates", "installer.html")
 
-    packages = unpack_packages(dist_dir)
+    packages = unpack_packages(dist_dir, repo_root)
     if not packages:
         print("\n[!] ERROR: No build artifacts found in dist/!")
         print("    Build the app first with: npm run build (or zeus build)")
@@ -358,7 +395,7 @@ def main():
     server = None
     for p in range(port, port + 10):
         try:
-            handler_class = create_handler(packages, template_path)
+            handler_class = create_handler(repo_root, dist_dir, template_path)
             server = http.server.HTTPServer(("", p), handler_class)
             port = p
             break
@@ -371,8 +408,9 @@ def main():
 
     url = f"http://{lan_ip}:{port}"
 
+    ver = get_app_version(repo_root)
     print("=" * 64)
-    print("⌚ SMART ALARM - GADGETBRIDGE INSTALLER")
+    print(f"⌚ SMART ALARM v{ver} - GADGETBRIDGE INSTALLER")
     print("=" * 64)
     for target_key, pkg in sorted(packages.items(), key=lambda x: (0 if x[0] == "universal" else 1)):
         tag = "🌟 [UNIVERSAL]:" if target_key == "universal" else f"📦 [{target_key.upper()}]:"

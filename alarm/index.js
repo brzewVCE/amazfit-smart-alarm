@@ -41,3 +41,10 @@ export {
   clearLogs,
   getSystemDiagnosticInfo,
 } from './diagnostics'
+
+export {
+  APP_VERSION,
+  APP_BUILD_CODE,
+  APP_BUILD_DATE,
+} from './version'
+

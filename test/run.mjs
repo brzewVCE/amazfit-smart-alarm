@@ -702,10 +702,17 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   ok(logs.some((l) => l.tag === 'RING_INIT'), 'RING_INIT event recorded in diagnostics')
   ok(logs.some((l) => l.tag === 'VIBRATE_START'), 'VIBRATE_START event recorded in diagnostics')
 
-  // 13e. Diag page renders properly
+  // 13e. Diag / Dev Menu page renders properly
+  const { APP_VERSION } = await import('../alarm/version.js')
   uiMock.__mock.reset()
   diagPage.build()
-  ok(byText('Diagnostyka Budzika') !== undefined, 'diag.page.js renders title')
+  ok(byText('Dev Menu & Logi') !== undefined, 'diag.page.js renders Dev Menu title')
+  ok(
+    uiMock.__mock.created.some(
+      (w) => typeof w._opts.text === 'string' && w._opts.text.includes(`v${APP_VERSION}`)
+    ),
+    'diag.page.js displays APP_VERSION'
+  )
   ok(byText('Test Wibracji') !== undefined, 'diag.page.js renders vibration test button')
   ok(byText('Wyczyść logi') !== undefined, 'diag.page.js renders clear logs button')
 
@@ -725,18 +732,21 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   clearLogsBtn._opts.click_func()
   ok(getLogs().length === 0, 'clear logs button successfully empties log store')
 
-  // Diag button on index page
+  // Dev Menu button and version badge on index page
   uiMock.__mock.reset()
   indexPage.build()
-  const diagBtn = byText('Diag')
-  ok(diagBtn !== undefined, 'index.page.js displays Diag button in header')
-  diagBtn._opts.click_func()
+  const devBtn = byText('⚙ Dev Menu')
+  ok(devBtn !== undefined, 'index.page.js displays ⚙ Dev Menu button in header')
+  devBtn._opts.click_func()
   ok(
     routerMock.__mock.calls.some(
       (c) => c.fn === 'push' && c.opts && c.opts.url === 'page/diag.page'
     ),
-    'Diag button navigates to page/diag.page'
+    '⚙ Dev Menu button navigates to page/diag.page'
   )
+
+  const verBadge = byText(`v${APP_VERSION} · Dev Menu`)
+  ok(verBadge !== undefined, 'index.page.js displays clickable version footer badge')
 }
 
 console.log(`\nALL ${passCount} CHECKS PASSED`)
