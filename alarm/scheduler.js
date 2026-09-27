@@ -1,6 +1,6 @@
-import { set, cancel } from '@zos/alarm'
+import { set, cancel, getAllAlarms } from '@zos/alarm'
 import { SMART_CHECK_INTERVAL_SEC } from './constants'
-import { upsertAlarm } from './repository'
+import { getAlarms, upsertAlarm } from './repository'
 import { logEvent } from './diagnostics'
 
 const RING_URL = 'page/ring.page'
@@ -179,3 +179,43 @@ export function snooze(alarm, minutes) {
   logEvent('SNOOZE', { id: alarm.id, minutes, nativeId: alarm.nativeIds.final })
   upsertAlarm(alarm)
 }
+
+/**
+ * Verifies that all enabled alarms have active native timers registered in Zepp OS.
+ * If any enabled alarm lost its timer (e.g. after mini-program update or watch reboot),
+ * automatically re-arms it.
+ * @returns {number} count of alarms re-armed
+ */
+export function reconcileTimers() {
+  let rearmedCount = 0
+  try {
+    const alarms = getAlarms()
+    let activeOsIds = []
+    try {
+      if (typeof getAllAlarms === 'function') {
+        activeOsIds = getAllAlarms() || []
+      }
+    } catch (e) {}
+
+    for (const alarm of alarms) {
+      if (alarm.enabled) {
+        const hasFinal =
+          alarm.nativeIds &&
+          alarm.nativeIds.final &&
+          activeOsIds.includes(alarm.nativeIds.final)
+
+        if (!hasFinal) {
+          scheduleAlarm(alarm)
+          rearmedCount++
+          logEvent('AUTO_RESCHEDULE', {
+            id: alarm.id,
+            time: `${alarm.hour}:${alarm.minute}`,
+            newNativeId: alarm.nativeIds ? alarm.nativeIds.final : 0,
+          })
+        }
+      }
+    }
+  } catch (e) {}
+  return rearmedCount
+}
+

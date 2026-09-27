@@ -3,10 +3,12 @@ import { back } from '@zos/router'
 import { px } from '@zos/utils'
 import { getDeviceInfo } from '@zos/device'
 import { Vibrator, VIBRATOR_SCENE_TIMER } from '@zos/sensor'
+import { setScrollMode, scrollTo, SCROLL_MODE_FREE } from '@zos/page'
 import {
   getLogs,
   clearLogs,
   getSystemDiagnosticInfo,
+  reconcileTimers,
   APP_VERSION,
   APP_BUILD_CODE,
   APP_BUILD_DATE,
@@ -20,12 +22,35 @@ Page({
     testTimer: null,
   },
 
+  onInit() {
+    this.enableScrolling()
+  },
+
   build() {
+    this.enableScrolling()
     this.render()
   },
 
   onShow() {
+    this.enableScrolling()
     this.render()
+  },
+
+  enableScrolling() {
+    try {
+      setScrollMode({
+        mode: SCROLL_MODE_FREE,
+        options: {
+          modeParams: {
+            bounce: true,
+          },
+        },
+      })
+    } catch (e) {
+      try {
+        setScrollMode({ mode: SCROLL_MODE_FREE })
+      } catch (e2) {}
+    }
   },
 
   clear() {
@@ -46,14 +71,18 @@ Page({
       dev = getDeviceInfo() || dev
     } catch (e) {}
 
-    // Back Button (top left)
+    const isRound = isRoundScreen()
+    // Start safely below the Zepp OS native status bar (50-60px on square, 84px on round)
+    let y = isRound ? 84 : 64
+
+    // Top Header: Back Button and Page Title on the same row
     this.track(
       createWidget(widget.BUTTON, {
         x: px(16),
-        y: px(14),
+        y: px(y),
         w: px(100),
-        h: px(38),
-        radius: px(19),
+        h: px(44),
+        radius: px(22),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
         text: '< Wróć',
@@ -65,30 +94,32 @@ Page({
       })
     )
 
-    // Title
     this.track(
       createWidget(widget.TEXT, {
-        x: px(16),
-        y: px(56),
-        w: px(358),
-        h: px(34),
+        x: px(126),
+        y: px(y),
+        w: px(248),
+        h: px(44),
         text: 'Dev Menu & Logi',
-        text_size: px(26),
+        text_size: px(23),
         color: COLOR.primary,
         align_h: align.LEFT,
         align_v: align.CENTER_V,
+        text_style: text_style.NONE,
       })
     )
 
+    y += 54
+
     // Version & Device Info Banner
-    const roundLabel = isRoundScreen() ? 'Round' : 'Square'
+    const roundLabel = isRound ? 'Round' : 'Square'
     const verText = `Wersja: v${APP_VERSION} (b${APP_BUILD_CODE}) | ${APP_BUILD_DATE}\nEkran: ${dev.width || 390}x${dev.height || 450} (${roundLabel})`
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
-        y: px(94),
+        y: px(y),
         w: px(358),
-        h: px(44),
+        h: px(46),
         text: verText,
         text_size: px(16),
         color: COLOR.text,
@@ -96,6 +127,8 @@ Page({
         align_v: align.TOP,
       })
     )
+
+    y += 50
 
     // System Status Banner (DND / Sleep / Timers)
     let statusText = ''
@@ -109,9 +142,9 @@ Page({
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
-        y: px(142),
+        y: px(y),
         w: px(358),
-        h: px(44),
+        h: px(46),
         text: statusText,
         text_size: px(16),
         color: sys.mode.dnd || sys.mode.sleep ? COLOR.danger : COLOR.textDim,
@@ -120,12 +153,13 @@ Page({
       })
     )
 
-    // Buttons side-by-side (fitting 390px safely)
-    // Test Vibrator
+    y += 50
+
+    // Actions Row 1: Test Vibrator & Clear Logs
     this.track(
       createWidget(widget.BUTTON, {
         x: px(16),
-        y: px(192),
+        y: px(y),
         w: px(174),
         h: px(42),
         radius: px(21),
@@ -140,11 +174,10 @@ Page({
       })
     )
 
-    // Clear Logs
     this.track(
       createWidget(widget.BUTTON, {
         x: px(198),
-        y: px(192),
+        y: px(y),
         w: px(176),
         h: px(42),
         radius: px(21),
@@ -160,13 +193,37 @@ Page({
       })
     )
 
+    y += 48
+
+    // Actions Row 2: Re-arm / Reconcile Timers button
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(y),
+        w: px(358),
+        h: px(44),
+        radius: px(22),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: '🔄 Uzbrój / Odśwież timery',
+        text_size: px(18),
+        color: COLOR.primary,
+        click_func: () => {
+          reconcileTimers()
+          this.render()
+        },
+      })
+    )
+
+    y += 52
+
     // Recent Logs Header
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
-        y: px(242),
+        y: px(y),
         w: px(358),
-        h: px(26),
+        h: px(28),
         text: `Ostatnie zdarzenia (${logs.length}):`,
         text_size: px(19),
         color: COLOR.text,
@@ -175,31 +232,62 @@ Page({
       })
     )
 
-    // Logs content (last 15 entries reversed)
-    const recent = logs.slice(-15).reverse()
+    y += 32
+
+    // Logs content (last 30 entries reversed)
+    const recent = logs.slice(-30).reverse()
     let logLines = ''
     if (recent.length === 0) {
       logLines = 'Brak zarejestrowanych zdarzeń.\nUstaw budzik, by sprawdzić logi.'
     } else {
       logLines = recent
-        .map((e) => `[${e.t}] ${e.tag} ${e.d}`)
-        .join('\n')
+        .map((e) => `[${e.t}] ${e.tag}\n${e.d ? '  ' + e.d : ''}`)
+        .join('\n\n')
     }
+
+    // Dynamic height based on number of items so text never truncates
+    const logH = Math.max(200, Math.min(1800, recent.length * 48 + 40))
 
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
-        y: px(272),
+        y: px(y),
         w: px(358),
-        h: px(200),
+        h: px(logH),
         text: logLines,
-        text_size: px(14),
+        text_size: px(15),
         color: COLOR.textDim,
         align_h: align.LEFT,
         align_v: align.TOP,
         text_style: text_style.WRAP,
       })
     )
+
+    y += logH + 16
+
+    // Scroll to Top button at the end of the scrollable page
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(y),
+        w: px(358),
+        h: px(46),
+        radius: px(23),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: '⬆ Wróć na górę',
+        text_size: px(18),
+        color: COLOR.primary,
+        click_func: () => {
+          try {
+            scrollTo({ y: 0 })
+          } catch (e) {}
+        },
+      })
+    )
+
+    // Extra bottom spacer for bounce overscroll
+    y += 60
   },
 
   runVibrationTest() {

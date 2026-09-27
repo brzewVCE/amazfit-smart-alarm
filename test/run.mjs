@@ -18,6 +18,7 @@ import * as sensorMock from '@zos/sensor'
 import * as deviceMock from '@zos/device'
 import * as displayMock from '@zos/display'
 import * as settingsMock from '@zos/settings'
+import * as pageMock from '@zos/page'
 import * as interactionMock from '@zos/interaction'
 import { __resetAllMockStorage } from '@zos/storage'
 import { WidgetTracker } from '../ui/tracker.js'
@@ -38,6 +39,7 @@ function resetAllMocks() {
   deviceMock.__mock.reset()
   displayMock.__mock.reset()
   settingsMock.__mock.reset()
+  pageMock.__mock.reset()
   interactionMock.__mock.reset()
   __resetAllMockStorage()
 }
@@ -702,11 +704,16 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   ok(logs.some((l) => l.tag === 'RING_INIT'), 'RING_INIT event recorded in diagnostics')
   ok(logs.some((l) => l.tag === 'VIBRATE_START'), 'VIBRATE_START event recorded in diagnostics')
 
-  // 13e. Diag / Dev Menu page renders properly
+  // 13e. Diag / Dev Menu page renders properly with scrolling enabled
   const { APP_VERSION } = await import('../alarm/version.js')
+  const { reconcileTimers } = await import('../alarm/scheduler.js')
   uiMock.__mock.reset()
   diagPage.build()
   ok(byText('Dev Menu & Logi') !== undefined, 'diag.page.js renders Dev Menu title')
+  ok(
+    pageMock.__mock.calls.some((c) => c.fn === 'setScrollMode' && c.options?.mode === pageMock.SCROLL_MODE_FREE),
+    'diag.page.js enables SCROLL_MODE_FREE'
+  )
   ok(
     uiMock.__mock.created.some(
       (w) => typeof w._opts.text === 'string' && w._opts.text.includes(`v${APP_VERSION}`)
@@ -715,6 +722,13 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   )
   ok(byText('Test Wibracji') !== undefined, 'diag.page.js renders vibration test button')
   ok(byText('Wyczyść logi') !== undefined, 'diag.page.js renders clear logs button')
+  ok(byText('🔄 Uzbrój / Odśwież timery') !== undefined, 'diag.page.js renders reconcile timers button')
+  ok(byText('⬆ Wróć na górę') !== undefined, 'diag.page.js renders scroll to top button')
+
+  // Test scroll to top button
+  const topBtn = byText('⬆ Wróć na górę')
+  topBtn._opts.click_func()
+  ok(pageMock.__mock.calls.some((c) => c.fn === 'scrollTo' && c.options?.y === 0), 'scroll to top button calls scrollTo(0)')
 
   // Test vibration button triggers vibrator with VIBRATOR_SCENE_TIMER
   sensorMock.__mock.reset()
@@ -731,6 +745,19 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   const clearLogsBtn = byText('Wyczyść logi')
   clearLogsBtn._opts.click_func()
   ok(getLogs().length === 0, 'clear logs button successfully empties log store')
+
+  // Reconcile timers button re-arms missing alarms
+  alarm.enabled = true
+  upsertAlarm(alarm)
+  alarmMock.__mock.reset() // simulates OS wiping alarms after update
+  const reconcileBtn = byText('🔄 Uzbrój / Odśwież timery')
+  reconcileBtn._opts.click_func()
+  ok(alarmMock.__mock.active.size > 0, 'reconcile timers button successfully re-arms enabled alarms')
+
+  // app.js onCreate also automatically runs reconcileTimers
+  alarmMock.__mock.reset()
+  appDef.onCreate(null)
+  ok(alarmMock.__mock.active.size > 0, 'app.js onCreate automatically reconciles and re-arms missing native timers')
 
   // Dev Menu button and version badge on index page
   uiMock.__mock.reset()

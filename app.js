@@ -1,4 +1,5 @@
 import { logEvent } from './alarm/diagnostics'
+import { reconcileTimers } from './alarm/scheduler'
 
 App({
   globalData: {
@@ -11,7 +12,12 @@ App({
 
   onCreate(params) {
     logEvent('APP_CREATE', { params: params || 'empty' })
-    if (!params) return
+    if (!params) {
+      try {
+        reconcileTimers()
+      } catch (e) {}
+      return
+    }
     try {
       const parsed = typeof params === 'string' ? JSON.parse(params) : params
       if (this.globalData) {

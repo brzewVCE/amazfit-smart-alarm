@@ -31,6 +31,7 @@ export {
   scheduleNextCheck,
   rearmAfterRing,
   snooze,
+  reconcileTimers,
 } from './scheduler'
 
 export { checkForWakeSignal } from './smart-wake'
