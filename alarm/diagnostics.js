@@ -99,27 +99,23 @@ export function getSystemDiagnosticInfo() {
 }
 
 /**
- * Formats diagnostic logs and system info into a compact string suitable for QR code export.
+ * Formats diagnostic logs and system info into an ultra-compact string safe for embedded QR encoders (capped <= 120 bytes).
  * @param {Array<{ t: string, tag: string, d: string }>} logs
  * @param {object} [sys]
  * @param {number} [pageIdx=0] - 0-indexed page (0 = latest entries)
- * @param {number} [pageSize=15] - entries per QR code
+ * @param {number} [pageSize=4] - entries per QR code (kept low for embedded RTOS safety)
  * @returns {{ content: string, totalPages: number, pageIdx: number, count: number }}
  */
-export function formatLogsForQr(logs = [], sys = null, pageIdx = 0, pageSize = 15) {
+export function formatLogsForQr(logs = [], sys = null, pageIdx = 0, pageSize = 4) {
   if (!logs || logs.length === 0) {
-    const sysSummary = sys?.mode?.available
-      ? `DND:${sys.mode.dnd ? 1 : 0} Sleep:${sys.mode.sleep ? 1 : 0}`
-      : 'SysMode:N/A'
     return {
-      content: `SmartAlarm\n${sysSummary}\nNo events logged.`,
+      content: 'SmartAlarm\nNo events logged.',
       totalPages: 1,
       pageIdx: 0,
       count: 0,
     }
   }
 
-  // Reverse so newest entries come first
   const reversed = logs.slice().reverse()
   const totalPages = Math.max(1, Math.ceil(reversed.length / pageSize))
   const safePage = Math.max(0, Math.min(pageIdx, totalPages - 1))
@@ -127,22 +123,36 @@ export function formatLogsForQr(logs = [], sys = null, pageIdx = 0, pageSize = 1
   const slice = reversed.slice(start, start + pageSize)
 
   const sysSummary = sys?.mode?.available
-    ? `DND:${sys.mode.dnd ? 1 : 0} Sleep:${sys.mode.sleep ? 1 : 0} Timers:[${(sys.osAlarmIds || []).join(',')}]`
-    : `Timers:[${(sys?.osAlarmIds || []).join(',')}]`
+    ? `D:${sys.mode.dnd ? 1 : 0} S:${sys.mode.sleep ? 1 : 0}`
+    : 'Sys:OK'
 
   const lines = [
-    `SmartAlarm (p${safePage + 1}/${totalPages})`,
-    sysSummary,
-    '---',
+    `SA (p${safePage + 1}/${totalPages}) ${sysSummary}`,
   ]
 
   for (const entry of slice) {
-    const detail = entry.d ? ' ' + entry.d : ''
-    lines.push(`${entry.t} ${entry.tag}${detail}`)
+    let d = ''
+    if (entry.d) {
+      try {
+        const p = JSON.parse(entry.d)
+        if (p.params) d = ` ${p.params}`
+        else if (p.id) d = ` id=${p.id}`
+        else if (p.time) d = ` ${p.time}`
+        else if (p.hr) d = ` hr=${p.hr}`
+        else d = ` ${entry.d.slice(0, 8)}`
+      } catch (e) {
+        d = ` ${entry.d.slice(0, 8)}`
+      }
+    }
+    const timeShort = entry.t ? entry.t.slice(0, 5) : ''
+    lines.push(`${timeShort} ${entry.tag}${d}`)
   }
 
+  // Strict clamp to 120 bytes max to prevent any RTOS buffer overflow
+  const content = lines.join('\n').slice(0, 120)
+
   return {
-    content: lines.join('\n'),
+    content,
     totalPages,
     pageIdx: safePage,
     count: reversed.length,

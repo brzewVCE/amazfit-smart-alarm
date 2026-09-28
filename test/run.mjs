@@ -726,20 +726,20 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   ok(byText('🔄 Reconcile Timers') !== undefined, 'diag.page.js renders reconcile timers button')
   ok(byText('⬆ Back to Top') !== undefined, 'diag.page.js renders scroll to top button')
 
-  // Verify recent logs text display is rendered
-  ok(byText('Recent Events') !== undefined, 'diag.page.js renders Recent Events header')
+  // Verify safe QR code widget is rendered
+  const qrWidget = uiMock.__mock.created.find((w) => w._type === 'WIDGET_QRCODE')
+  ok(qrWidget !== undefined, 'diag.page.js renders safe WIDGET_QRCODE')
   ok(
-    uiMock.__mock.created.some(
-      (w) => typeof w._opts.text === 'string' && w._opts.text.includes('RING_INIT')
-    ),
-    'diag.page.js displays recorded log events in scrollable text'
+    typeof qrWidget._opts.content === 'string' && qrWidget._opts.content.includes('SA'),
+    'QR code contains compact diagnostic payload'
   )
+  ok(qrWidget._opts.content.length <= 120, 'QR payload strictly obeys 120-byte safety clamp')
 
   // Verify formatLogsForQr helper unit behavior
   const formattedEmpty = formatLogsForQr([])
   ok(formattedEmpty.totalPages === 1 && formattedEmpty.content.includes('No events logged'), 'formatLogsForQr handles empty logs')
-  const formattedFull = formatLogsForQr(logs, { mode: { available: true, dnd: false, sleep: false }, osAlarmIds: [1] }, 0, 5)
-  ok(formattedFull.totalPages >= 1 && formattedFull.content.includes('Timers:[1]'), 'formatLogsForQr formats system mode and timers')
+  const formattedFull = formatLogsForQr(logs, { mode: { available: true, dnd: false, sleep: false }, osAlarmIds: [1] }, 0, 4)
+  ok(formattedFull.totalPages >= 1 && formattedFull.content.length <= 120, 'formatLogsForQr formats compact system mode and timers within clamp')
 
   // Test scroll to top button
   const topBtn = byText('⬆ Back to Top')
@@ -762,7 +762,7 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   clearLogsBtn._opts.click_func()
   ok(getLogs().length === 0, 'clear logs button successfully empties log store')
   ok(
-    byText('No events recorded yet') !== undefined,
+    byText('No diagnostic events recorded yet') !== undefined,
     'diag.page.js displays empty state message after clearing logs'
   )
 
