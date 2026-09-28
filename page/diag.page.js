@@ -8,7 +8,6 @@ import {
   getLogs,
   clearLogs,
   getSystemDiagnosticInfo,
-  formatLogsForQr,
   reconcileTimers,
   APP_VERSION,
   APP_BUILD_CODE,
@@ -21,7 +20,6 @@ Page({
     tracker: new WidgetTracker(),
     testVibrator: null,
     testTimer: null,
-    pageIdx: 0,
   },
 
   onInit() {
@@ -34,8 +32,7 @@ Page({
   },
 
   onShow() {
-    this.enableScrolling()
-    this.render()
+    // Page already built and rendered, prevent redundant re-renders
   },
 
   enableScrolling() {
@@ -190,7 +187,6 @@ Page({
         color: COLOR.textDim,
         click_func: () => {
           clearLogs()
-          this.state.pageIdx = 0
           this.render()
         },
       })
@@ -220,14 +216,14 @@ Page({
 
     y += 52
 
-    // Log Export Header
+    // Recent Logs Header
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
         y: px(y),
         w: px(358),
         h: px(28),
-        text: `Log Export (${logs.length} events):`,
+        text: `Recent Events (${logs.length}):`,
         text_size: px(19),
         color: COLOR.text,
         align_h: align.LEFT,
@@ -237,125 +233,36 @@ Page({
 
     y += 32
 
-    if (logs.length === 0) {
-      this.track(
-        createWidget(widget.TEXT, {
-          x: px(16),
-          y: px(y),
-          w: px(358),
-          h: px(60),
-          text: 'No diagnostic events recorded yet.\nSet an alarm to generate logs.',
-          text_size: px(15),
-          color: COLOR.textDim,
-          align_h: align.CENTER_H,
-          align_v: align.TOP,
-          text_style: text_style.WRAP,
-        })
-      )
-      y += 70
+    // Logs content (last 30 entries reversed)
+    const recent = logs.slice(-30).reverse()
+    let logLines = ''
+    if (recent.length === 0) {
+      logLines = 'No events recorded yet.\nSet an alarm to inspect logs.'
     } else {
-      const qrData = formatLogsForQr(logs, sys, this.state.pageIdx, 15)
-      const qrSize = Math.min(260, (dev.width || 390) - 60)
-      const qrX = Math.floor(((dev.width || 390) - qrSize) / 2)
-      const bgPad = 10
-
-      this.track(
-        createWidget(widget.QRCODE, {
-          content: qrData.content,
-          x: px(qrX),
-          y: px(y + bgPad),
-          w: px(qrSize),
-          h: px(qrSize),
-          bg_x: px(qrX - bgPad),
-          bg_y: px(y),
-          bg_w: px(qrSize + bgPad * 2),
-          bg_h: px(qrSize + bgPad * 2),
-          bg_radius: px(12),
-        })
-      )
-
-      y += qrSize + bgPad * 2 + 14
-
-      if (qrData.totalPages > 1) {
-        // Pagination Controls
-        const btnW = 104
-        const pageW = (dev.width || 390) - 32 - btnW * 2
-
-        this.track(
-          createWidget(widget.BUTTON, {
-            x: px(16),
-            y: px(y),
-            w: px(btnW),
-            h: px(40),
-            radius: px(20),
-            normal_color: this.state.pageIdx > 0 ? COLOR.surface : COLOR.surfaceAlt,
-            press_color: COLOR.surfaceAlt,
-            text: '< Newer',
-            text_size: px(16),
-            color: this.state.pageIdx > 0 ? COLOR.primary : COLOR.textDim,
-            click_func: () => {
-              if (this.state.pageIdx > 0) {
-                this.state.pageIdx--
-                this.render()
-              }
-            },
-          })
-        )
-
-        this.track(
-          createWidget(widget.TEXT, {
-            x: px(16 + btnW),
-            y: px(y),
-            w: px(pageW),
-            h: px(40),
-            text: `Page ${qrData.pageIdx + 1}/${qrData.totalPages}`,
-            text_size: px(16),
-            color: COLOR.text,
-            align_h: align.CENTER_H,
-            align_v: align.CENTER_V,
-          })
-        )
-
-        this.track(
-          createWidget(widget.BUTTON, {
-            x: px(16 + btnW + pageW),
-            y: px(y),
-            w: px(btnW),
-            h: px(40),
-            radius: px(20),
-            normal_color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.surface : COLOR.surfaceAlt,
-            press_color: COLOR.surfaceAlt,
-            text: 'Older >',
-            text_size: px(16),
-            color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.primary : COLOR.textDim,
-            click_func: () => {
-              if (this.state.pageIdx < qrData.totalPages - 1) {
-                this.state.pageIdx++
-                this.render()
-              }
-            },
-          })
-        )
-
-        y += 48
-      }
-
-      this.track(
-        createWidget(widget.TEXT, {
-          x: px(16),
-          y: px(y),
-          w: px(358),
-          h: px(24),
-          text: 'Scan with phone camera or Google Lens',
-          text_size: px(14),
-          color: COLOR.textDim,
-          align_h: align.CENTER_H,
-          align_v: align.CENTER_V,
-        })
-      )
-
-      y += 34
+      logLines = recent
+        .map((e) => `[${e.t}] ${e.tag}\n${e.d ? '  ' + e.d : ''}`)
+        .join('\n\n')
     }
+
+    // Dynamic height based on number of items so text never truncates
+    const logH = Math.max(200, Math.min(1800, recent.length * 48 + 40))
+
+    this.track(
+      createWidget(widget.TEXT, {
+        x: px(16),
+        y: px(y),
+        w: px(358),
+        h: px(logH),
+        text: logLines,
+        text_size: px(15),
+        color: COLOR.textDim,
+        align_h: align.LEFT,
+        align_v: align.TOP,
+        text_style: text_style.WRAP,
+      })
+    )
+
+    y += logH + 16
 
     // Scroll to Top button at the end of the scrollable page
     this.track(
