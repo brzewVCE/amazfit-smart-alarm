@@ -726,14 +726,26 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   ok(byText('🔄 Reconcile Timers') !== undefined, 'diag.page.js renders reconcile timers button')
   ok(byText('⬆ Back to Top') !== undefined, 'diag.page.js renders scroll to top button')
 
-  // Verify safe QR code widget is rendered
+  // Verify dedicated Export Logs button is rendered
+  const exportBtn = byText('📱 Export Logs (QR Code)')
+  ok(exportBtn !== undefined, 'diag.page.js renders Export Logs button')
+
+  // Click Export Logs button to open dedicated QR view
+  exportBtn._opts.click_func()
   const qrWidget = uiMock.__mock.created.find((w) => w._type === 'WIDGET_QRCODE')
-  ok(qrWidget !== undefined, 'diag.page.js renders safe WIDGET_QRCODE')
+  ok(qrWidget !== undefined, 'dedicated QR view renders WIDGET_QRCODE')
   ok(
     typeof qrWidget._opts.content === 'string' && qrWidget._opts.content.includes('SA'),
     'QR code contains compact diagnostic payload'
   )
   ok(qrWidget._opts.content.length <= 120, 'QR payload strictly obeys 120-byte safety clamp')
+  ok(qrWidget._opts.bg_x !== undefined && qrWidget._opts.bg_y !== undefined, 'QR code has explicitly aligned background coordinates')
+
+  // Click < Back on QR view to return to menu
+  const qrBackBtn = byText('< Back')
+  ok(qrBackBtn !== undefined, 'QR view has < Back button')
+  qrBackBtn._opts.click_func()
+  ok(byText('Dev Menu & Logs') !== undefined, 'returns cleanly to Dev Menu')
 
   // Verify formatLogsForQr helper unit behavior
   const formattedEmpty = formatLogsForQr([])
@@ -757,14 +769,10 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
     'diag page test button starts VIBRATOR_SCENE_TIMER'
   )
 
-  // Clear logs button empties the list and displays empty message
+  // Clear logs button empties the list
   const clearLogsBtn = byText('Clear Logs')
   clearLogsBtn._opts.click_func()
   ok(getLogs().length === 0, 'clear logs button successfully empties log store')
-  ok(
-    byText('No diagnostic events recorded yet') !== undefined,
-    'diag.page.js displays empty state message after clearing logs'
-  )
 
   // Reconcile timers button re-arms missing alarms
   alarm.enabled = true

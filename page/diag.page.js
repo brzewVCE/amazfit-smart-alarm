@@ -22,6 +22,7 @@ Page({
     testVibrator: null,
     testTimer: null,
     pageIdx: 0,
+    viewMode: 'menu', // 'menu' | 'qr'
   },
 
   onInit() {
@@ -64,7 +65,14 @@ Page({
 
   render() {
     this.clear()
+    if (this.state.viewMode === 'qr') {
+      this.renderQrView()
+    } else {
+      this.renderMenu()
+    }
+  },
 
+  renderMenu() {
     const sys = getSystemDiagnosticInfo()
     const logs = getLogs()
     let dev = { width: 390, height: 450 }
@@ -73,7 +81,6 @@ Page({
     } catch (e) {}
 
     const isRound = isRoundScreen()
-    // Start safely below the Zepp OS native status bar (50-60px on square, 84px on round)
     let y = isRound ? 84 : 64
 
     // Top Header: Back Button and Page Title on the same row
@@ -219,136 +226,48 @@ Page({
 
     y += 52
 
-    // Log Export Header
+    // Actions Row 3: Dedicated Export Logs QR Button
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(y),
+        w: px(358),
+        h: px(46),
+        radius: px(23),
+        normal_color: COLOR.primaryDim,
+        press_color: COLOR.primary,
+        text: `📱 Export Logs (QR Code) [${logs.length}]`,
+        text_size: px(18),
+        color: COLOR.text,
+        click_func: () => {
+          this.state.viewMode = 'qr'
+          this.state.pageIdx = 0
+          this.render()
+        },
+      })
+    )
+
+    y += 54
+
+    // Info Text under button
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
         y: px(y),
         w: px(358),
-        h: px(28),
-        text: `Log Export (QR Code):`,
-        text_size: px(19),
-        color: COLOR.text,
-        align_h: align.LEFT,
-        align_v: align.CENTER_V,
+        h: px(44),
+        text: logs.length === 0
+          ? 'No events recorded yet.\nSet an alarm to inspect logs.'
+          : `${logs.length} events recorded.\nTap green button above to view scan QR.`,
+        text_size: px(15),
+        color: COLOR.textDim,
+        align_h: align.CENTER_H,
+        align_v: align.TOP,
+        text_style: text_style.WRAP,
       })
     )
 
-    y += 32
-
-    if (logs.length === 0) {
-      this.track(
-        createWidget(widget.TEXT, {
-          x: px(16),
-          y: px(y),
-          w: px(358),
-          h: px(60),
-          text: 'No diagnostic events recorded yet.\nSet an alarm to generate logs.',
-          text_size: px(15),
-          color: COLOR.textDim,
-          align_h: align.CENTER_H,
-          align_v: align.TOP,
-          text_style: text_style.WRAP,
-        })
-      )
-      y += 70
-    } else {
-      const qrData = formatLogsForQr(logs, sys, this.state.pageIdx, 4)
-      const qrSize = 220
-      const qrX = Math.floor(((dev.width || 390) - qrSize) / 2)
-
-      this.track(
-        createWidget(widget.QRCODE, {
-          content: qrData.content,
-          x: px(qrX),
-          y: px(y),
-          w: px(qrSize),
-          h: px(qrSize),
-        })
-      )
-
-      y += qrSize + 14
-
-      if (qrData.totalPages > 1) {
-        // Pagination Controls
-        const btnW = 104
-        const pageW = (dev.width || 390) - 32 - btnW * 2
-
-        this.track(
-          createWidget(widget.BUTTON, {
-            x: px(16),
-            y: px(y),
-            w: px(btnW),
-            h: px(40),
-            radius: px(20),
-            normal_color: this.state.pageIdx > 0 ? COLOR.surface : COLOR.surfaceAlt,
-            press_color: COLOR.surfaceAlt,
-            text: '< Newer',
-            text_size: px(16),
-            color: this.state.pageIdx > 0 ? COLOR.primary : COLOR.textDim,
-            click_func: () => {
-              if (this.state.pageIdx > 0) {
-                this.state.pageIdx--
-                this.render()
-              }
-            },
-          })
-        )
-
-        this.track(
-          createWidget(widget.TEXT, {
-            x: px(16 + btnW),
-            y: px(y),
-            w: px(pageW),
-            h: px(40),
-            text: `Page ${qrData.pageIdx + 1}/${qrData.totalPages}`,
-            text_size: px(16),
-            color: COLOR.text,
-            align_h: align.CENTER_H,
-            align_v: align.CENTER_V,
-          })
-        )
-
-        this.track(
-          createWidget(widget.BUTTON, {
-            x: px(16 + btnW + pageW),
-            y: px(y),
-            w: px(btnW),
-            h: px(40),
-            radius: px(20),
-            normal_color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.surface : COLOR.surfaceAlt,
-            press_color: COLOR.surfaceAlt,
-            text: 'Older >',
-            text_size: px(16),
-            color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.primary : COLOR.textDim,
-            click_func: () => {
-              if (this.state.pageIdx < qrData.totalPages - 1) {
-                this.state.pageIdx++
-                this.render()
-              }
-            },
-          })
-        )
-
-        y += 48
-      }
-
-      this.track(
-        createWidget(widget.TEXT, {
-          x: px(16),
-          y: px(y),
-          w: px(358),
-          h: px(24),
-          text: `Scan with phone camera (${logs.length} events)`,
-          text_size: px(14),
-          color: COLOR.textDim,
-          align_h: align.CENTER_H,
-          align_v: align.CENTER_V,
-        })
-      )
-
-      y += 34
-    }
+    y += 56
 
     // Scroll to Top button at the end of the scrollable page
     this.track(
@@ -371,8 +290,170 @@ Page({
       })
     )
 
-    // Extra bottom spacer for bounce overscroll
     y += 60
+  },
+
+  renderQrView() {
+    const sys = getSystemDiagnosticInfo()
+    const logs = getLogs()
+    let dev = { width: 390, height: 450 }
+    try {
+      dev = getDeviceInfo() || dev
+    } catch (e) {}
+
+    const isRound = isRoundScreen()
+    const topY = isRound ? 72 : 52
+
+    // Header: Back to Menu and Title
+    this.track(
+      createWidget(widget.BUTTON, {
+        x: px(16),
+        y: px(topY),
+        w: px(96),
+        h: px(40),
+        radius: px(20),
+        normal_color: COLOR.surface,
+        press_color: COLOR.surfaceAlt,
+        text: '< Back',
+        text_size: px(18),
+        color: COLOR.textDim,
+        click_func: () => {
+          this.state.viewMode = 'menu'
+          this.render()
+        },
+      })
+    )
+
+    this.track(
+      createWidget(widget.TEXT, {
+        x: px(120),
+        y: px(topY),
+        w: px(254),
+        h: px(40),
+        text: 'Export Logs',
+        text_size: px(22),
+        color: COLOR.primary,
+        align_h: align.LEFT,
+        align_v: align.CENTER_V,
+      })
+    )
+
+    if (logs.length === 0) {
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(24),
+          y: px(180),
+          w: px(342),
+          h: px(80),
+          text: 'No diagnostic events recorded yet.\nSet an alarm to generate logs.',
+          text_size: px(17),
+          color: COLOR.textDim,
+          align_h: align.CENTER_H,
+          align_v: align.CENTER_V,
+          text_style: text_style.WRAP,
+        })
+      )
+      return
+    }
+
+    // Format QR data with 6 events per page (compact & safe <= 120 bytes)
+    const qrData = formatLogsForQr(logs, sys, this.state.pageIdx, 6)
+    const qrSize = 210
+    const qrX = Math.floor(((dev.width || 390) - qrSize) / 2)
+    const qrY = topY + 50
+    const bgPad = 12
+
+    // Explicitly aligned background coordinates to prevent misalignment
+    this.track(
+      createWidget(widget.QRCODE, {
+        content: qrData.content,
+        x: px(qrX),
+        y: px(qrY),
+        w: px(qrSize),
+        h: px(qrSize),
+        bg_x: px(qrX - bgPad),
+        bg_y: px(qrY - bgPad),
+        bg_w: px(qrSize + bgPad * 2),
+        bg_h: px(qrSize + bgPad * 2),
+      })
+    )
+
+    const controlsY = qrY + qrSize + bgPad + 12
+
+    if (qrData.totalPages > 1) {
+      const btnW = 104
+      const pageW = (dev.width || 390) - 32 - btnW * 2
+
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(16),
+          y: px(controlsY),
+          w: px(btnW),
+          h: px(38),
+          radius: px(19),
+          normal_color: this.state.pageIdx > 0 ? COLOR.surface : COLOR.surfaceAlt,
+          press_color: COLOR.surfaceAlt,
+          text: '< Newer',
+          text_size: px(16),
+          color: this.state.pageIdx > 0 ? COLOR.primary : COLOR.textDim,
+          click_func: () => {
+            if (this.state.pageIdx > 0) {
+              this.state.pageIdx--
+              this.render()
+            }
+          },
+        })
+      )
+
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(16 + btnW),
+          y: px(controlsY),
+          w: px(pageW),
+          h: px(38),
+          text: `${qrData.pageIdx + 1} / ${qrData.totalPages}`,
+          text_size: px(16),
+          color: COLOR.text,
+          align_h: align.CENTER_H,
+          align_v: align.CENTER_V,
+        })
+      )
+
+      this.track(
+        createWidget(widget.BUTTON, {
+          x: px(16 + btnW + pageW),
+          y: px(controlsY),
+          w: px(btnW),
+          h: px(38),
+          radius: px(19),
+          normal_color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.surface : COLOR.surfaceAlt,
+          press_color: COLOR.surfaceAlt,
+          text: 'Older >',
+          text_size: px(16),
+          color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.primary : COLOR.textDim,
+          click_func: () => {
+            if (this.state.pageIdx < qrData.totalPages - 1) {
+              this.state.pageIdx++
+              this.render()
+            }
+          },
+        })
+      )
+    }
+
+    this.track(
+      createWidget(widget.TEXT, {
+        x: px(16),
+        y: px(controlsY + (qrData.totalPages > 1 ? 44 : 8)),
+        w: px(358),
+        h: px(24),
+        text: `Point camera to scan (${logs.length} events)`,
+        text_size: px(14),
+        color: COLOR.textDim,
+        align_h: align.CENTER_H,
+        align_v: align.CENTER_V,
+      })
+    )
   },
 
   runVibrationTest() {
