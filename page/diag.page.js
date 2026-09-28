@@ -8,6 +8,7 @@ import {
   getLogs,
   clearLogs,
   getSystemDiagnosticInfo,
+  formatLogsForQr,
   reconcileTimers,
   APP_VERSION,
   APP_BUILD_CODE,
@@ -20,6 +21,7 @@ Page({
     tracker: new WidgetTracker(),
     testVibrator: null,
     testTimer: null,
+    pageIdx: 0,
   },
 
   onInit() {
@@ -80,12 +82,12 @@ Page({
       createWidget(widget.BUTTON, {
         x: px(16),
         y: px(y),
-        w: px(100),
+        w: px(96),
         h: px(44),
         radius: px(22),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
-        text: '< Wróć',
+        text: '< Back',
         text_size: px(18),
         color: COLOR.textDim,
         click_func: () => {
@@ -96,11 +98,11 @@ Page({
 
     this.track(
       createWidget(widget.TEXT, {
-        x: px(126),
+        x: px(120),
         y: px(y),
-        w: px(248),
+        w: px(254),
         h: px(44),
-        text: 'Dev Menu & Logi',
+        text: 'Dev Menu & Logs',
         text_size: px(23),
         color: COLOR.primary,
         align_h: align.LEFT,
@@ -113,7 +115,7 @@ Page({
 
     // Version & Device Info Banner
     const roundLabel = isRound ? 'Round' : 'Square'
-    const verText = `Wersja: v${APP_VERSION} (b${APP_BUILD_CODE}) | ${APP_BUILD_DATE}\nEkran: ${dev.width || 390}x${dev.height || 450} (${roundLabel})`
+    const verText = `Version: v${APP_VERSION} (b${APP_BUILD_CODE}) | ${APP_BUILD_DATE}\nScreen: ${dev.width || 390}x${dev.height || 450} (${roundLabel})`
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
@@ -133,11 +135,11 @@ Page({
     // System Status Banner (DND / Sleep / Timers)
     let statusText = ''
     if (sys.mode.available) {
-      statusText += `DND: ${sys.mode.dnd ? 'WŁ (!)' : 'WYŁ'} | Sen: ${sys.mode.sleep ? 'WŁ (!)' : 'WYŁ'}\n`
+      statusText += `DND: ${sys.mode.dnd ? 'ON (!)' : 'OFF'} | Sleep: ${sys.mode.sleep ? 'ON (!)' : 'OFF'}\n`
     } else {
-      statusText += `Tryb snu/DND: [Standard API]\n`
+      statusText += `Sleep/DND mode: [Standard API]\n`
     }
-    statusText += `Timery Zepp OS: ${sys.osAlarmIds.length} [${sys.osAlarmIds.join(', ') || 'brak'}]`
+    statusText += `Zepp OS Timers: ${sys.osAlarmIds.length} [${sys.osAlarmIds.join(', ') || 'none'}]`
 
     this.track(
       createWidget(widget.TEXT, {
@@ -165,7 +167,7 @@ Page({
         radius: px(21),
         normal_color: COLOR.primaryDim,
         press_color: COLOR.primary,
-        text: 'Test Wibracji',
+        text: 'Test Vibrator',
         text_size: px(18),
         color: COLOR.text,
         click_func: () => {
@@ -183,11 +185,12 @@ Page({
         radius: px(21),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
-        text: 'Wyczyść logi',
+        text: 'Clear Logs',
         text_size: px(17),
         color: COLOR.textDim,
         click_func: () => {
           clearLogs()
+          this.state.pageIdx = 0
           this.render()
         },
       })
@@ -195,7 +198,7 @@ Page({
 
     y += 48
 
-    // Actions Row 2: Re-arm / Reconcile Timers button
+    // Actions Row 2: Reconcile Timers button
     this.track(
       createWidget(widget.BUTTON, {
         x: px(16),
@@ -205,7 +208,7 @@ Page({
         radius: px(22),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
-        text: '🔄 Uzbrój / Odśwież timery',
+        text: '🔄 Reconcile Timers',
         text_size: px(18),
         color: COLOR.primary,
         click_func: () => {
@@ -217,14 +220,14 @@ Page({
 
     y += 52
 
-    // Recent Logs Header
+    // Log Export Header
     this.track(
       createWidget(widget.TEXT, {
         x: px(16),
         y: px(y),
         w: px(358),
         h: px(28),
-        text: `Ostatnie zdarzenia (${logs.length}):`,
+        text: `Log Export (${logs.length} events):`,
         text_size: px(19),
         color: COLOR.text,
         align_h: align.LEFT,
@@ -234,36 +237,125 @@ Page({
 
     y += 32
 
-    // Logs content (last 30 entries reversed)
-    const recent = logs.slice(-30).reverse()
-    let logLines = ''
-    if (recent.length === 0) {
-      logLines = 'Brak zarejestrowanych zdarzeń.\nUstaw budzik, by sprawdzić logi.'
+    if (logs.length === 0) {
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(16),
+          y: px(y),
+          w: px(358),
+          h: px(60),
+          text: 'No diagnostic events recorded yet.\nSet an alarm to generate logs.',
+          text_size: px(15),
+          color: COLOR.textDim,
+          align_h: align.CENTER_H,
+          align_v: align.TOP,
+          text_style: text_style.WRAP,
+        })
+      )
+      y += 70
     } else {
-      logLines = recent
-        .map((e) => `[${e.t}] ${e.tag}\n${e.d ? '  ' + e.d : ''}`)
-        .join('\n\n')
+      const qrData = formatLogsForQr(logs, sys, this.state.pageIdx, 15)
+      const qrSize = Math.min(260, (dev.width || 390) - 60)
+      const qrX = Math.floor(((dev.width || 390) - qrSize) / 2)
+      const bgPad = 10
+
+      this.track(
+        createWidget(widget.QRCODE, {
+          content: qrData.content,
+          x: px(qrX),
+          y: px(y + bgPad),
+          w: px(qrSize),
+          h: px(qrSize),
+          bg_x: px(qrX - bgPad),
+          bg_y: px(y),
+          bg_w: px(qrSize + bgPad * 2),
+          bg_h: px(qrSize + bgPad * 2),
+          bg_radius: px(12),
+        })
+      )
+
+      y += qrSize + bgPad * 2 + 14
+
+      if (qrData.totalPages > 1) {
+        // Pagination Controls
+        const btnW = 104
+        const pageW = (dev.width || 390) - 32 - btnW * 2
+
+        this.track(
+          createWidget(widget.BUTTON, {
+            x: px(16),
+            y: px(y),
+            w: px(btnW),
+            h: px(40),
+            radius: px(20),
+            normal_color: this.state.pageIdx > 0 ? COLOR.surface : COLOR.surfaceAlt,
+            press_color: COLOR.surfaceAlt,
+            text: '< Newer',
+            text_size: px(16),
+            color: this.state.pageIdx > 0 ? COLOR.primary : COLOR.textDim,
+            click_func: () => {
+              if (this.state.pageIdx > 0) {
+                this.state.pageIdx--
+                this.render()
+              }
+            },
+          })
+        )
+
+        this.track(
+          createWidget(widget.TEXT, {
+            x: px(16 + btnW),
+            y: px(y),
+            w: px(pageW),
+            h: px(40),
+            text: `Page ${qrData.pageIdx + 1}/${qrData.totalPages}`,
+            text_size: px(16),
+            color: COLOR.text,
+            align_h: align.CENTER_H,
+            align_v: align.CENTER_V,
+          })
+        )
+
+        this.track(
+          createWidget(widget.BUTTON, {
+            x: px(16 + btnW + pageW),
+            y: px(y),
+            w: px(btnW),
+            h: px(40),
+            radius: px(20),
+            normal_color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.surface : COLOR.surfaceAlt,
+            press_color: COLOR.surfaceAlt,
+            text: 'Older >',
+            text_size: px(16),
+            color: this.state.pageIdx < qrData.totalPages - 1 ? COLOR.primary : COLOR.textDim,
+            click_func: () => {
+              if (this.state.pageIdx < qrData.totalPages - 1) {
+                this.state.pageIdx++
+                this.render()
+              }
+            },
+          })
+        )
+
+        y += 48
+      }
+
+      this.track(
+        createWidget(widget.TEXT, {
+          x: px(16),
+          y: px(y),
+          w: px(358),
+          h: px(24),
+          text: 'Scan with phone camera or Google Lens',
+          text_size: px(14),
+          color: COLOR.textDim,
+          align_h: align.CENTER_H,
+          align_v: align.CENTER_V,
+        })
+      )
+
+      y += 34
     }
-
-    // Dynamic height based on number of items so text never truncates
-    const logH = Math.max(200, Math.min(1800, recent.length * 48 + 40))
-
-    this.track(
-      createWidget(widget.TEXT, {
-        x: px(16),
-        y: px(y),
-        w: px(358),
-        h: px(logH),
-        text: logLines,
-        text_size: px(15),
-        color: COLOR.textDim,
-        align_h: align.LEFT,
-        align_v: align.TOP,
-        text_style: text_style.WRAP,
-      })
-    )
-
-    y += logH + 16
 
     // Scroll to Top button at the end of the scrollable page
     this.track(
@@ -275,7 +367,7 @@ Page({
         radius: px(23),
         normal_color: COLOR.surface,
         press_color: COLOR.surfaceAlt,
-        text: '⬆ Wróć na górę',
+        text: '⬆ Back to Top',
         text_size: px(18),
         color: COLOR.primary,
         click_func: () => {

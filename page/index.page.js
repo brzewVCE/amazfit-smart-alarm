@@ -134,7 +134,7 @@ Page({
           radius: px(24),
           normal_color: COLOR.surface,
           press_color: COLOR.surfaceAlt,
-          text: `⚙ Dev Menu & Logi (v${APP_VERSION})`,
+          text: `⚙ Dev Menu & Logs (v${APP_VERSION})`,
           text_size: px(18),
           color: COLOR.primary,
           click_func: () => {

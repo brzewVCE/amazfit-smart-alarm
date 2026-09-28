@@ -5,8 +5,8 @@
     "appName": "Smart Alarm",
     "appType": "app",
     "version": {
-      "code": 3,
-      "name": "1.2.1"
+      "code": 4,
+      "name": "1.2.2"
     },
     "icon": "icon.png",
     "vender": "amazfit-smart-alarm",

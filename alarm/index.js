@@ -41,6 +41,7 @@ export {
   getLogs,
   clearLogs,
   getSystemDiagnosticInfo,
+  formatLogsForQr,
 } from './diagnostics'
 
 export {

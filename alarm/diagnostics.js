@@ -97,3 +97,55 @@ export function getSystemDiagnosticInfo() {
     osAlarmIds,
   }
 }
+
+/**
+ * Formats diagnostic logs and system info into a compact string suitable for QR code export.
+ * @param {Array<{ t: string, tag: string, d: string }>} logs
+ * @param {object} [sys]
+ * @param {number} [pageIdx=0] - 0-indexed page (0 = latest entries)
+ * @param {number} [pageSize=15] - entries per QR code
+ * @returns {{ content: string, totalPages: number, pageIdx: number, count: number }}
+ */
+export function formatLogsForQr(logs = [], sys = null, pageIdx = 0, pageSize = 15) {
+  if (!logs || logs.length === 0) {
+    const sysSummary = sys?.mode?.available
+      ? `DND:${sys.mode.dnd ? 1 : 0} Sleep:${sys.mode.sleep ? 1 : 0}`
+      : 'SysMode:N/A'
+    return {
+      content: `SmartAlarm\n${sysSummary}\nNo events logged.`,
+      totalPages: 1,
+      pageIdx: 0,
+      count: 0,
+    }
+  }
+
+  // Reverse so newest entries come first
+  const reversed = logs.slice().reverse()
+  const totalPages = Math.max(1, Math.ceil(reversed.length / pageSize))
+  const safePage = Math.max(0, Math.min(pageIdx, totalPages - 1))
+  const start = safePage * pageSize
+  const slice = reversed.slice(start, start + pageSize)
+
+  const sysSummary = sys?.mode?.available
+    ? `DND:${sys.mode.dnd ? 1 : 0} Sleep:${sys.mode.sleep ? 1 : 0} Timers:[${(sys.osAlarmIds || []).join(',')}]`
+    : `Timers:[${(sys?.osAlarmIds || []).join(',')}]`
+
+  const lines = [
+    `SmartAlarm (p${safePage + 1}/${totalPages})`,
+    sysSummary,
+    '---',
+  ]
+
+  for (const entry of slice) {
+    const detail = entry.d ? ' ' + entry.d : ''
+    lines.push(`${entry.t} ${entry.tag}${detail}`)
+  }
+
+  return {
+    content: lines.join('\n'),
+    totalPages,
+    pageIdx: safePage,
+    count: reversed.length,
+  }
+}
+

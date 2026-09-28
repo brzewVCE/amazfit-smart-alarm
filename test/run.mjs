@@ -707,9 +707,10 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
   // 13e. Diag / Dev Menu page renders properly with scrolling enabled
   const { APP_VERSION } = await import('../alarm/version.js')
   const { reconcileTimers } = await import('../alarm/scheduler.js')
+  const { formatLogsForQr } = await import('../alarm/diagnostics.js')
   uiMock.__mock.reset()
   diagPage.build()
-  ok(byText('Dev Menu & Logi') !== undefined, 'diag.page.js renders Dev Menu title')
+  ok(byText('Dev Menu & Logs') !== undefined, 'diag.page.js renders Dev Menu title')
   ok(
     pageMock.__mock.calls.some((c) => c.fn === 'setScrollMode' && c.options?.mode === pageMock.SCROLL_MODE_FREE),
     'diag.page.js enables SCROLL_MODE_FREE'
@@ -720,19 +721,33 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
     ),
     'diag.page.js displays APP_VERSION'
   )
-  ok(byText('Test Wibracji') !== undefined, 'diag.page.js renders vibration test button')
-  ok(byText('Wyczyść logi') !== undefined, 'diag.page.js renders clear logs button')
-  ok(byText('🔄 Uzbrój / Odśwież timery') !== undefined, 'diag.page.js renders reconcile timers button')
-  ok(byText('⬆ Wróć na górę') !== undefined, 'diag.page.js renders scroll to top button')
+  ok(byText('Test Vibrator') !== undefined, 'diag.page.js renders vibration test button')
+  ok(byText('Clear Logs') !== undefined, 'diag.page.js renders clear logs button')
+  ok(byText('🔄 Reconcile Timers') !== undefined, 'diag.page.js renders reconcile timers button')
+  ok(byText('⬆ Back to Top') !== undefined, 'diag.page.js renders scroll to top button')
+
+  // Check QR Code widget is rendered when logs exist
+  const qrWidget = uiMock.__mock.created.find((w) => w._type === 'WIDGET_QRCODE')
+  ok(qrWidget !== undefined, 'diag.page.js renders WIDGET_QRCODE when logs exist')
+  ok(
+    typeof qrWidget._opts.content === 'string' && qrWidget._opts.content.includes('SmartAlarm'),
+    'QR code contains formatted diagnostic content'
+  )
+
+  // Verify formatLogsForQr helper unit behavior
+  const formattedEmpty = formatLogsForQr([])
+  ok(formattedEmpty.totalPages === 1 && formattedEmpty.content.includes('No events logged'), 'formatLogsForQr handles empty logs')
+  const formattedFull = formatLogsForQr(logs, { mode: { available: true, dnd: false, sleep: false }, osAlarmIds: [1] }, 0, 5)
+  ok(formattedFull.totalPages >= 1 && formattedFull.content.includes('Timers:[1]'), 'formatLogsForQr formats system mode and timers')
 
   // Test scroll to top button
-  const topBtn = byText('⬆ Wróć na górę')
+  const topBtn = byText('⬆ Back to Top')
   topBtn._opts.click_func()
   ok(pageMock.__mock.calls.some((c) => c.fn === 'scrollTo' && c.options?.y === 0), 'scroll to top button calls scrollTo(0)')
 
   // Test vibration button triggers vibrator with VIBRATOR_SCENE_TIMER
   sensorMock.__mock.reset()
-  const testVibBtn = byText('Test Wibracji')
+  const testVibBtn = byText('Test Vibrator')
   testVibBtn._opts.click_func()
   ok(
     sensorMock.__mock.vibrations.some(
@@ -741,16 +756,20 @@ console.log('\n13. Resilience & Diagnostics: setWakeUpRelaunch, VIBRATOR_SCENE_T
     'diag page test button starts VIBRATOR_SCENE_TIMER'
   )
 
-  // Clear logs button empties the list
-  const clearLogsBtn = byText('Wyczyść logi')
+  // Clear logs button empties the list and displays empty message
+  const clearLogsBtn = byText('Clear Logs')
   clearLogsBtn._opts.click_func()
   ok(getLogs().length === 0, 'clear logs button successfully empties log store')
+  ok(
+    byText('No diagnostic events recorded yet') !== undefined,
+    'diag.page.js displays empty state message after clearing logs'
+  )
 
   // Reconcile timers button re-arms missing alarms
   alarm.enabled = true
   upsertAlarm(alarm)
   alarmMock.__mock.reset() // simulates OS wiping alarms after update
-  const reconcileBtn = byText('🔄 Uzbrój / Odśwież timery')
+  const reconcileBtn = byText('🔄 Reconcile Timers')
   reconcileBtn._opts.click_func()
   ok(alarmMock.__mock.active.size > 0, 'reconcile timers button successfully re-arms enabled alarms')
 
