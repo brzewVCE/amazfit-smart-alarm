@@ -15,25 +15,53 @@ using the officially recommended `@zeppos/zeus-cli` toolchain and the modern
   against their resting heart rate; a noticeable rise (a light-sleep /
   waking signal) triggers the alarm early and gently. If no such signal is
   seen, the alarm falls back to ringing at the exact set time regardless.
+- **Zombie Walk (Wake Challenge / CAPTCHA)**: Ensures cognitive and physical
+  arousal before silencing the alarm. When ringing, the user must walk a configured
+  number of steps (e.g. 10–50 steps) tracked via real-time pedometer sensors (`@zos/sensor.Step`).
+- **Anti-Exit Defenses**: Prevents groggy users from dismissing the alarm by
+  accidentally pressing the physical side button or swiping back (`onKey` and
+  `onGesture` guards with watchdog relaunch fallbacks).
 - Ringing screen with **Snooze** (9 minutes) and **Dismiss**, using a
   repeating call-style vibration until acknowledged.
+- **Dev Menu & Diagnostics**: Dedicated developer settings screen accessible
+  from the main screen (`⚙` button or version footer) showing installed version,
+  active OS timers, timer self-healing (`reconcileTimers`), vibration test, and multi-page
+  **QR Code log export** to easily scan flight-recorder diagnostic events directly with a smartphone.
 - Alarms persist across reboots (native OS timers created with
   `store: true`) and are stored on-device with `@zos/storage`.
+
+## Important: Zepp OS Sleep Mode & DND Behavior
+
+> [!IMPORTANT]
+> **Native Sleep Mode / Do Not Disturb (DND):**
+> On Zepp OS, the watch's native **Sleep Mode** (*Tryb uśpienia / snu*) and Do Not Disturb (DND) actively silence vibrations and suppress 3rd-party mini-program wake alarms.
+>
+> If the watch is in native Sleep Mode when an alarm is scheduled to ring:
+> - The OS will **suppress the wake-up / ring screen** and silence motor vibrations.
+> - **Requirement:** For alarms to ring and vibrate reliably, **native Sleep Mode must be disabled or scheduled to turn off before your alarm time** in your watch's system settings.
 
 ## Project layout
 
 ```
-app.json                 # Zepp OS manifest (target: bip_max, deviceSource 11206915)
-app.js                   # App lifecycle - captures the @zos/alarm wake payload
+app.json                 # Zepp OS manifest (target: bip_max, Active 2 Square / Round, Rome, Milan)
+app.js                   # App lifecycle - captures wake payload, auto-reconciles timers
 page/
-  index.page.js          # Alarm list + "add" entry point
-  edit.page.js           # Create/edit an alarm (time picker, repeat days, smart wake)
-  ring.page.js           # Full-screen ringing UI, also used for silent smart-wake checks
-utils/
-  constants.js           # Colors, sizes, weekday labels, smart-wake tuning
-  alarm-store.js         # @zos/storage-backed CRUD for the alarm list
-  alarm-scheduler.js     # Computes fire times and drives @zos/alarm set()/cancel()
-assets/bip_max/           # icon.png + SLIDE_SWITCH track/knob art (placeholders - see below)
+  index.page.js          # Alarm list, Dev Menu button, version footer, "add" entry point
+  edit.page.js           # Create/edit alarm (time picker, repeat days, smart wake, zombie walk)
+  ring.page.js           # Full-screen ringing UI, CAPTCHA controller, silent smart-wake checks
+  diag.page.js           # Dev Menu: timer status, self-healing, QR code flight recorder export
+alarm/
+  model.js               # Alarm entity definition and factory
+  repository.js          # @zos/storage CRUD persistence
+  scheduler.js           # @zos/alarm scheduling and timer reconciliation
+  smart-wake.js          # Heart rate light-sleep delta analysis
+  diagnostics.js         # Flight recorder event ring buffer and safe QR formatting
+  version.js             # Semantic version metadata
+captcha/
+  registry.js            # Challenge strategy registry (e.g. Zombie Walk)
+  strategies/            # Concrete CAPTCHA implementations (Step sensor)
+ui/                      # UI helpers, time pickers, device dimensions
+assets/                  # Icons and slide switch artwork
 ```
 
 ## Native widgets used
@@ -41,7 +69,7 @@ assets/bip_max/           # icon.png + SLIDE_SWITCH track/knob art (placeholders
 The UI is built entirely from `@zos/ui` widgets - no custom canvas drawing:
 `TIME_PICKER` (full-screen time selection), `SLIDE_SWITCH` (alarm on/off,
 Smart Wake on/off), `BUTTON` (all taps/navigation, including the weekday
-multi-select row), `TEXT` and `FILL_RECT`.
+multi-select row), `TEXT`, `FILL_RECT`, and `QRCODE` (in a dedicated view for safe diagnostics export).
 
 ## How alarms are scheduled
 
@@ -52,7 +80,7 @@ weekday bitmask, "once" alarms and the smart-wake window can all share one
 simple mechanism:
 
 1. Saving an alarm computes the next matching timestamp
-   (`alarm-scheduler.js#computeNextTimestamp`) and arms a **final** timer at
+   (`alarm/scheduler.js#computeNextTimestamp`) and arms a **final** timer at
    that exact time with `url: 'page/ring.page'`.
 2. If Smart Wake is on, a second **check** timer is armed at
    `target - window`. Each time it fires it opens `ring.page` "invisibly"
@@ -65,12 +93,14 @@ simple mechanism:
 4. On dismiss, a repeating alarm is simply re-armed for its next
    occurrence; a one-time alarm is disabled. Snooze re-arms the final timer
    `SNOOZE_MINUTES` later.
+5. **Self-Healing Reconciliation**: If native timers are lost (e.g. following OS upgrades or third-party interference), launching the app triggers `scheduler.reconcileTimers()` to automatically verify and restore missing OS timers for all active alarms.
 
 This keeps the whole feature inside documented, stable APIs instead of
 relying on any single "smart alarm" primitive (Zepp OS doesn't have one).
 
 ## Known limitations / follow-ups
 
+- Native Zepp OS Sleep Mode must be turned off or scheduled to finish before alarm time (see note above).
 - The alarm list renders up to 5 rows directly (no scrolling list widget
   yet) - plenty for typical use, but worth swapping for `SCROLL_LIST` if you
   need more.
@@ -154,16 +184,18 @@ a Node loader hook (`test/resolve-hook.mjs`, registered through
 resolves the extensionless relative imports Zepp's own rollup-based bundler
 allows but Node's ESM resolver doesn't.
 
-It's 49 checks driving the app end to end at the logic/interaction level:
+It's 176 checks driving the app end to end at the logic/interaction level:
 `computeNextTimestamp`'s date math, rendering the alarm list (empty and
 populated), the whole create-alarm flow through `edit.page.js` (opening and
 completing the native `TIME_PICKER`, toggling a weekday button, flipping the
-`SLIDE_SWITCH` widgets, Save), an alarm firing and being dismissed or
-snoozed, both smart-wake branches (heart-rate rise vs. no rise) with the
-resulting native-timer arm/cancel calls, and delete. It will not catch
-device-specific rendering/layout issues - only the official simulator or a
-real watch can - but it does catch logic regressions and crashes across the
-whole codebase on every change, with no external dependencies.
+`SLIDE_SWITCH` widgets, Save), Zombie Walk step challenges and sensor integration,
+Anti-Exit locking, Dev Menu interaction, safe QR-code log export payloads,
+an alarm firing and being dismissed or snoozed, both smart-wake branches
+(heart-rate rise vs. no rise) with the resulting native-timer arm/cancel calls,
+and timer self-healing. It will not catch device-specific rendering/layout issues -
+only the official simulator or a real watch can - but it does catch logic
+regressions and crashes across the whole codebase on every change, with no external
+dependencies.
 
 ## Community Inspiration & Benchmarks
 
